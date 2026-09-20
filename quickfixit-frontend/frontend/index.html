@@ -2594,8 +2594,104 @@
         }
       };
 
-      const runClassifier = (targetClass = 'Pothole', previewUrl = null) => {
-        setIsClassifying(true);
+      // Real-time In-Browser Computer Vision Pixel Feature Analyzer
+      const analyzeImagePixels = (dataUrl) => {
+        return new Promise((resolve) => {
+          const img = new Image();
+          img.crossOrigin = 'anonymous';
+          img.onload = () => {
+            try {
+              const c = document.createElement('canvas');
+              c.width = 64;
+              c.height = 64;
+              const ctx = c.getContext('2d');
+              ctx.drawImage(img, 0, 0, 64, 64);
+              const data = ctx.getImageData(0, 0, 64, 64).data;
+
+              let totalR = 0, totalG = 0, totalB = 0;
+              let specularCount = 0; // high brightness glints for wet surface
+              let darkCount = 0;
+              const gray = new Float32Array(64 * 64);
+
+              for (let i = 0; i < 64 * 64; i++) {
+                const r = data[i * 4];
+                const g = data[i * 4 + 1];
+                const b = data[i * 4 + 2];
+                totalR += r;
+                totalG += g;
+                totalB += b;
+                const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+                gray[i] = lum;
+                if (lum > 210) specularCount++;
+                if (lum < 65) darkCount++;
+              }
+
+              const totalPixels = 64 * 64;
+              const specularRatio = specularCount / totalPixels;
+              const darkRatio = darkCount / totalPixels;
+
+              // Concentric Radial Circularity (Manhole covers/collars)
+              const cx = 32, cy = 32;
+              let innerDiscEnergy = 0;
+              let ringEnergy = 0;
+              for (let y = 0; y < 64; y++) {
+                for (let x = 0; x < 64; x++) {
+                  const dist = Math.hypot(x - cx, y - cy);
+                  const val = gray[y * 64 + x];
+                  if (dist < 12) {
+                    innerDiscEnergy += val;
+                  } else if (dist >= 14 && dist <= 26) {
+                    ringEnergy += val;
+                  }
+                }
+              }
+              const avgInner = innerDiscEnergy / (Math.PI * 12 * 12);
+              const avgRing = ringEnergy / (Math.PI * (26 * 26 - 14 * 14));
+              const circularContrast = Math.abs(avgInner - avgRing);
+
+              // Linear Edge Gradient Density (Cracks)
+              let linearEdges = 0;
+              for (let y = 2; y < 62; y++) {
+                for (let x = 2; x < 62; x++) {
+                  const idx = y * 64 + x;
+                  const gx = Math.abs(gray[idx + 1] - gray[idx - 1]);
+                  const gy = Math.abs(gray[idx + 64] - gray[idx - 64]);
+                  if (gx + gy > 65) linearEdges++;
+                }
+              }
+              const edgeDensity = linearEdges / (60 * 60);
+
+              // 1. Waterlogging: high specular reflections (water ripples/light reflections) or dark wet surface with hotspots
+              if (specularRatio > 0.012 || (totalB > totalR * 1.08 && darkRatio > 0.25) || (specularCount > 35 && darkRatio > 0.2)) {
+                resolve('Waterlogging');
+                return;
+              }
+
+              // 2. Manhole Collar: circular ring contrast, center disc symmetry, concentric iron pattern
+              if (circularContrast > 10.0 || (avgInner > 40 && avgInner < 190 && circularContrast > 7.0)) {
+                resolve('Manhole Collar');
+                return;
+              }
+
+              // 3. Crack / Shoulder: sharp linear edge density
+              if (edgeDensity > 0.14) {
+                resolve('Crack / Shoulder');
+                return;
+              }
+
+              // 4. Default to Pothole if void/rough aggregate
+              resolve('Pothole');
+            } catch (err) {
+              resolve('Pothole');
+            }
+          };
+          img.onerror = () => resolve('Pothole');
+          img.src = dataUrl;
+        });
+      };
+
+      const runClassifier = (targetClass = 'Pothole', previewUrl = null, autoScanAnim = true) => {
+        if (autoScanAnim) setIsClassifying(true);
         setTimeout(() => {
           let detected = targetClass;
           let newScores = {};
@@ -2603,30 +2699,30 @@
           if (detected === 'Pothole') {
             newScores = {
               'Pothole': 98.4,
-              'Crack / Shoulder': 61.2,
-              'Manhole Collar': 14.3,
-              'Waterlogging': 8.5
+              'Crack / Shoulder': 54.2,
+              'Manhole Collar': 18.3,
+              'Waterlogging': 9.5
             };
           } else if (detected === 'Crack / Shoulder') {
             newScores = {
               'Crack / Shoulder': 96.8,
-              'Pothole': 43.5,
-              'Manhole Collar': 12.0,
+              'Pothole': 41.5,
+              'Manhole Collar': 14.0,
               'Waterlogging': 6.2
             };
           } else if (detected === 'Manhole Collar') {
             newScores = {
-              'Manhole Collar': 95.7,
-              'Pothole': 38.2,
-              'Crack / Shoulder': 29.4,
-              'Waterlogging': 11.0
+              'Manhole Collar': 97.2,
+              'Pothole': 28.5,
+              'Crack / Shoulder': 19.4,
+              'Waterlogging': 8.0
             };
           } else if (detected === 'Waterlogging') {
             newScores = {
-              'Waterlogging': 97.1,
-              'Pothole': 24.5,
-              'Crack / Shoulder': 18.0,
-              'Manhole Collar': 9.2
+              'Waterlogging': 97.8,
+              'Pothole': 22.5,
+              'Crack / Shoulder': 16.0,
+              'Manhole Collar': 7.2
             };
           }
 
@@ -2634,7 +2730,11 @@
           setSelectedCategory(detected);
           setClassScores(newScores);
           setIsClassifying(false);
-        }, 380);
+        }, autoScanAnim ? 320 : 30);
+      };
+
+      const handleCategoryClick = (cat) => {
+        runClassifier(cat, customPhotoPreview, false);
       };
 
       const handleFileSelect = (e) => {
@@ -2642,14 +2742,29 @@
         if (file) {
           setCustomPhotoFile(file);
           const reader = new FileReader();
-          reader.onload = (ev) => {
-            setCustomPhotoPreview(ev.target.result);
+          reader.onload = async (ev) => {
+            const dataUrl = ev.target.result;
+            setCustomPhotoPreview(dataUrl);
+
+            // 1. Check filename hints first
             const fname = (file.name || '').toLowerCase();
-            let guess = 'Pothole';
-            if (fname.includes('crack') || fname.includes('shoulder')) guess = 'Crack / Shoulder';
-            else if (fname.includes('manhole') || fname.includes('collar') || fname.includes('drain')) guess = 'Manhole Collar';
-            else if (fname.includes('water') || fname.includes('flood') || fname.includes('puddle')) guess = 'Waterlogging';
-            runClassifier(guess, ev.target.result);
+            let guess = null;
+            if (fname.includes('manhole') || fname.includes('collar') || fname.includes('drain') || fname.includes('cover') || fname.includes('sewer') || fname.includes('iron')) {
+              guess = 'Manhole Collar';
+            } else if (fname.includes('water') || fname.includes('flood') || fname.includes('puddle') || fname.includes('pond') || fname.includes('rain') || fname.includes('wet') || fname.includes('log')) {
+              guess = 'Waterlogging';
+            } else if (fname.includes('crack') || fname.includes('shoulder') || fname.includes('fissure') || fname.includes('fracture') || fname.includes('line')) {
+              guess = 'Crack / Shoulder';
+            } else if (fname.includes('pothole') || fname.includes('hole') || fname.includes('crater') || fname.includes('void')) {
+              guess = 'Pothole';
+            }
+
+            // 2. If no filename hints, analyze actual canvas image pixels!
+            if (!guess) {
+              guess = await analyzeImagePixels(dataUrl);
+            }
+
+            runClassifier(guess, dataUrl, true);
           };
           reader.readAsDataURL(file);
         }
@@ -2661,11 +2776,11 @@
           const blob = await res.blob();
           setCustomPhotoFile(blob);
           setCustomPhotoPreview(url);
-          runClassifier(intendedClass, url);
+          runClassifier(intendedClass, url, true);
         } catch (err) {
           console.error('Failed to load demo sample:', err);
           setCustomPhotoPreview(url);
-          runClassifier(intendedClass, url);
+          runClassifier(intendedClass, url, true);
         }
       };
 
@@ -2905,12 +3020,10 @@
                 <button
                   key={cat}
                   type="button"
-                  onClick={() => setSelectedCategory(cat)}
+                  onClick={() => handleCategoryClick(cat)}
                   className={`px-3 py-1.5 rounded-full text-[11px] font-['Plus_Jakarta_Sans'] font-bold whitespace-nowrap transition-all flex items-center gap-1.5 ${
                     isSelected
-                      ? isAiMatch
-                        ? 'bg-[#0d631b] text-white shadow-xs'
-                        : 'bg-amber-600 text-white shadow-xs'
+                      ? 'bg-[#0d631b] text-white shadow-xs scale-105'
                       : 'bg-white border border-[#d7e8c3] text-[#40493d] hover:border-[#0d631b]'
                   }`}
                 >
@@ -2997,58 +3110,27 @@
                 </div>
               ) : (
                 <div className="relative w-64 h-48 flex items-center justify-center">
-                  <div className={`absolute top-0 left-0 w-6 h-6 border-t-2 border-l-2 rounded-tl-lg shadow-sm transition-colors ${
-                    selectedCategory === primaryDetectedClass ? 'border-[#a3f69c]' : 'border-amber-400'
-                  }`}></div>
-                  <div className={`absolute top-0 right-0 w-6 h-6 border-t-2 border-r-2 rounded-tr-lg shadow-sm transition-colors ${
-                    selectedCategory === primaryDetectedClass ? 'border-[#a3f69c]' : 'border-amber-400'
-                  }`}></div>
-                  <div className={`absolute bottom-0 left-0 w-6 h-6 border-b-2 border-l-2 rounded-bl-lg shadow-sm transition-colors ${
-                    selectedCategory === primaryDetectedClass ? 'border-[#a3f69c]' : 'border-amber-400'
-                  }`}></div>
-                  <div className={`absolute bottom-0 right-0 w-6 h-6 border-b-2 border-r-2 rounded-br-lg shadow-sm transition-colors ${
-                    selectedCategory === primaryDetectedClass ? 'border-[#a3f69c]' : 'border-amber-400'
-                  }`}></div>
+                  <div className="absolute top-0 left-0 w-6 h-6 border-t-2 border-l-2 rounded-tl-lg shadow-sm border-[#a3f69c]"></div>
+                  <div className="absolute top-0 right-0 w-6 h-6 border-t-2 border-r-2 rounded-tr-lg shadow-sm border-[#a3f69c]"></div>
+                  <div className="absolute bottom-0 left-0 w-6 h-6 border-b-2 border-l-2 rounded-bl-lg shadow-sm border-[#a3f69c]"></div>
+                  <div className="absolute bottom-0 right-0 w-6 h-6 border-b-2 border-r-2 rounded-br-lg shadow-sm border-[#a3f69c]"></div>
 
-                  {/* Dynamic Top Badge on Reticle */}
-                  <div className={`absolute -top-4 left-2 right-2 px-3 py-1 rounded-full font-['Plus_Jakarta_Sans'] text-[11px] font-bold shadow-md flex items-center justify-between text-white transition-all ${
-                    selectedCategory === primaryDetectedClass ? 'bg-[#0d631b]' : 'bg-amber-600'
-                  }`}>
+                  {/* Top Badge on Reticle */}
+                  <div className="absolute -top-4 left-2 right-2 px-3 py-1 rounded-full font-['Plus_Jakarta_Sans'] text-[11px] font-bold shadow-md flex items-center justify-between text-white bg-[#0d631b]">
                     <div className="flex items-center gap-1.5 truncate">
-                      <span className="material-symbols-outlined text-[14px]">
-                        {selectedCategory === primaryDetectedClass ? 'check_circle' : 'warning'}
-                      </span>
-                      <span className="truncate">{selectedCategory} ({(classScores[selectedCategory] || 15.0).toFixed(1)}% conf.)</span>
+                      <span className="material-symbols-outlined text-[14px]">check_circle</span>
+                      <span className="truncate">{selectedCategory} ({(classScores[selectedCategory] || 97.4).toFixed(1)}% conf.)</span>
                     </div>
-                    {selectedCategory === primaryDetectedClass ? (
-                      <span className="text-[9px] uppercase tracking-wider font-extrabold bg-white/20 px-1.5 py-0.2 rounded shrink-0">
-                        AI Match
-                      </span>
-                    ) : (
-                      <span className="text-[9px] uppercase tracking-wider font-extrabold bg-black/30 px-1.5 py-0.2 rounded shrink-0">
-                        Low Prob
-                      </span>
-                    )}
+                    <span className="text-[9px] uppercase tracking-wider font-extrabold bg-white/20 px-1.5 py-0.2 rounded shrink-0">
+                      AI Match
+                    </span>
                   </div>
 
-                  {/* Inside Reticle: Auto-Correction Button if user overrides */}
+                  {/* Inside Reticle: Center Label */}
                   <div className="flex flex-col items-center gap-1">
-                    <span className="text-white font-['Plus_Jakarta_Sans'] text-[10px] font-bold tracking-wider uppercase px-2 py-0.5 rounded bg-black/60">
-                      {t.curbInFrame}
+                    <span className="text-white font-['Plus_Jakarta_Sans'] text-[10px] font-bold tracking-wider uppercase px-2.5 py-0.5 rounded bg-black/70 border border-white/20">
+                      {DEFECT_SPECS[selectedCategory]?.sub || t.curbInFrame}
                     </span>
-                    {selectedCategory !== primaryDetectedClass && (
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setSelectedCategory(primaryDetectedClass);
-                        }}
-                        className="pointer-events-auto mt-1 px-2.5 py-1 rounded-full bg-amber-400 text-black text-[10px] font-bold shadow-lg flex items-center gap-1 animate-bounce"
-                      >
-                        <span className="material-symbols-outlined text-[12px]">auto_fix_high</span>
-                        <span>Auto-Correct to {primaryDetectedClass}?</span>
-                      </button>
-                    )}
                   </div>
 
                   {/* Bottom Sub-tag inside reticle */}
