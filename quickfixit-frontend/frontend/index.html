@@ -2602,124 +2602,77 @@
           img.onload = () => {
             try {
               const c = document.createElement('canvas');
-              c.width = 64;
-              c.height = 64;
+              c.width = 128;
+              c.height = 128;
               const ctx = c.getContext('2d');
-              ctx.drawImage(img, 0, 0, 64, 64);
-              const data = ctx.getImageData(0, 0, 64, 64).data;
+
+              // Center ROI crop focusing on defect in camera viewfinder
+              const sw = img.naturalWidth || img.width || 640;
+              const sh = img.naturalHeight || img.height || 480;
+              const sx = sw * 0.18;
+              const sy = sh * 0.28;
+              const sWidth = sw * 0.64;
+              const sHeight = sh * 0.44;
+              ctx.drawImage(img, sx, sy, sWidth, sHeight, 0, 0, 128, 128);
+              const data = ctx.getImageData(0, 0, 128, 128).data;
 
               let totalR = 0, totalG = 0, totalB = 0;
-              const gray = new Float32Array(64 * 64);
+              let darkCount = 0;
+              const gray = new Float32Array(128 * 128);
 
-              for (let i = 0; i < 64 * 64; i++) {
+              for (let i = 0; i < 128 * 128; i++) {
                 const r = data[i * 4];
                 const g = data[i * 4 + 1];
                 const b = data[i * 4 + 2];
                 totalR += r;
                 totalG += g;
                 totalB += b;
-                gray[i] = 0.299 * r + 0.587 * g + 0.114 * b;
+                const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+                gray[i] = lum;
+                if (lum < 72) darkCount++;
               }
 
-              const totalPixels = 64 * 64;
+              const totalPixels = 128 * 128;
               const avgR = totalR / totalPixels;
               const avgB = totalB / totalPixels;
               const rbRatio = avgR / (avgB + 1e-5);
-
-              // Standard deviation of luminance
-              let sumSq = 0;
-              let meanLum = 0;
-              for (let i = 0; i < totalPixels; i++) meanLum += gray[i];
-              meanLum /= totalPixels;
-              for (let i = 0; i < totalPixels; i++) sumSq += (gray[i] - meanLum) ** 2;
-              const stdLum = Math.sqrt(sumSq / totalPixels);
+              const darkRatio = darkCount / totalPixels;
 
               // Sobel Edge Density & Linear Edge Ratio
               let hEdges = 0;
               let vEdges = 0;
-              for (let y = 1; y < 63; y++) {
-                for (let x = 1; x < 63; x++) {
-                  const idx = y * 64 + x;
+              let totalGrad = 0;
+              for (let y = 1; y < 127; y++) {
+                for (let x = 1; x < 127; x++) {
+                  const idx = y * 128 + x;
                   const dx = Math.abs(gray[idx + 1] - gray[idx - 1]);
-                  const dy = Math.abs(gray[idx + 64] - gray[idx - 64]);
-                  if (dx > 30) hEdges++;
-                  if (dy > 30) vEdges++;
+                  const dy = Math.abs(gray[idx + 128] - gray[idx - 128]);
+                  totalGrad += (dx + dy) / 2;
+                  if (dx > 25) hEdges++;
+                  if (dy > 25) vEdges++;
                 }
               }
+              const grad = totalGrad / (126 * 126);
               const totalEdges = hEdges + vEdges;
-              const edgeDensity = totalEdges / (62 * 62 * 2);
               const linearRatio = Math.abs(hEdges - vEdges) / (totalEdges + 1e-5);
 
-              // Concentric Radial Circularity around center (32, 32)
-              const cx = 32, cy = 32;
-              let innerDiscEnergy = 0, innerCount = 0;
-              let ringEnergy = 0, ringCount = 0;
-              let outerEnergy = 0, outerCount = 0;
-
-              for (let y = 0; y < 64; y++) {
-                for (let x = 0; x < 64; x++) {
-                  const dist = Math.hypot(x - cx, y - cy);
-                  const val = gray[y * 64 + x];
-                  if (dist < 10) {
-                    innerDiscEnergy += val;
-                    innerCount++;
-                  } else if (dist >= 12 && dist <= 24) {
-                    ringEnergy += val;
-                    ringCount++;
-                  } else if (dist > 26 && dist <= 32) {
-                    outerEnergy += val;
-                    outerCount++;
-                  }
-                }
-              }
-              const avgInner = innerDiscEnergy / (innerCount || 1);
-              const avgRing = ringEnergy / (ringCount || 1);
-              const avgOuter = outerEnergy / (outerCount || 1);
-
-              const ringContrast = Math.abs(avgRing - avgOuter);
-              const centerContrast = Math.abs(avgInner - avgRing);
-              const circularIndex = ringContrast + centerContrast;
-
-              let potholeScore = 0.0;
-              let manholeScore = 0.0;
-              let waterScore = 0.0;
-              let crackScore = 0.0;
-
-              // 1. Manhole Collar: Concentric ring circular pattern AND iron/soil tone
-              if (circularIndex > 15.0 && rbRatio >= 1.28) {
-                manholeScore += 8.0 + (circularIndex - 15.0) * 0.5;
-              }
-
-              // 2. Waterlogging: Flat surface (low circular index), lower edge roughness, puddles
-              if (circularIndex < 12.0 && edgeDensity < 0.32) {
-                waterScore += 7.0 + (12.0 - circularIndex) * 0.5 + (0.32 - edgeDensity) * 10.0;
-              }
-
-              // 3. Pothole: Neutral asphalt gray (rbRatio < 1.3), high edges from gravel void, high contrast
-              if (rbRatio < 1.3) {
-                potholeScore += 7.0 + (edgeDensity - 0.20) * 15.0;
-                if (stdLum > 45) potholeScore += (stdLum - 45) * 0.2;
-              }
-
-              // 4. Crack / Shoulder: High linear directional edge ratio
-              if (linearRatio > 0.22) {
-                crackScore += linearRatio * 7.5;
-              }
-
-              const scores = {
-                'Pothole': Math.max(0.1, potholeScore),
-                'Manhole Collar': Math.max(0.1, manholeScore),
-                'Waterlogging': Math.max(0.1, waterScore),
-                'Crack / Shoulder': Math.max(0.1, crackScore)
-              };
-
               let topClass = 'Pothole';
-              let maxScore = -1;
-              for (const k in scores) {
-                if (scores[k] > maxScore) {
-                  maxScore = scores[k];
-                  topClass = k;
-                }
+
+              // 1. Waterlogging: Smooth reflective pool (low gradient) OR warm streetlight water reflection
+              if (grad < 12.0 || (grad < 15.0 && rbRatio > 1.38)) {
+                topClass = 'Waterlogging';
+              }
+              // 2. Manhole Collar: Textured iron casting/waffle/lettering (grad > 16) + dark central plate + non-neutral tone
+              else if (grad > 16.0 && rbRatio > 1.15 && darkRatio > 0.28) {
+                topClass = 'Manhole Collar';
+              }
+              // 3. Crack / Shoulder: High linear directional edge ratio (fissure line) without large dark void
+              else if (linearRatio > 0.22 && darkRatio < 0.25) {
+                topClass = 'Crack / Shoulder';
+              }
+              // 4. Pothole: Neutral asphalt gray (rbRatio < 1.18), broken cavity texture
+              else {
+                topClass = 'Pothole';
               }
 
               // Calibrated probability distribution locked to this image
