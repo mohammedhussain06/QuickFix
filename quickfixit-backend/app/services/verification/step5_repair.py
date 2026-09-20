@@ -42,6 +42,52 @@ from app.core.config import settings
 DAMAGE_CLASSES = {"pothole", "road_damage", "crack", "damaged_road"}
 REPAIRED_CLASSES = {"road_patch", "intact_road", "repaired", "asphalt"}
 
+# Patch torch.load for PyTorch 2.6 compatibility with Ultralytics checkpoints
+try:
+    import torch
+    _orig_torch_load = torch.load
+    def _patched_torch_load(*args, **kwargs):
+        if "weights_only" not in kwargs:
+            kwargs["weights_only"] = False
+        return _orig_torch_load(*args, **kwargs)
+    torch.load = _patched_torch_load
+except Exception:
+    pass
+
+_CACHED_MODEL = None
+
+
+def _get_model():
+    global _CACHED_MODEL
+    if _CACHED_MODEL is not None:
+        return _CACHED_MODEL
+
+    from pathlib import Path
+    from ultralytics import YOLO
+
+    model_path = settings.yolo_model_path
+    p = Path(model_path)
+
+    # If local path doesn't exist, auto-fetch from Hugging Face Hub
+    if not p.exists():
+        if getattr(settings, "hf_model_repo", None):
+            try:
+                from huggingface_hub import hf_hub_download
+                hf_path = hf_hub_download(
+                    repo_id=settings.hf_model_repo,
+                    filename="best.pt",
+                )
+                if Path(hf_path).exists():
+                    model_path = hf_path
+            except Exception:
+                pass
+
+    if not Path(model_path).exists():
+        model_path = "yolov8n.pt"
+
+    _CACHED_MODEL = YOLO(model_path)
+    return _CACHED_MODEL
+
 
 def run(before_photo_bytes: bytes, after_photo_bytes: bytes) -> dict:
     """
@@ -59,15 +105,7 @@ def run(before_photo_bytes: bytes, after_photo_bytes: bytes) -> dict:
         except Exception:
             pass
 
-        from pathlib import Path
-        from ultralytics import YOLO
-        model_path = settings.yolo_model_path
-        if not Path(model_path).exists() and not Path(model_path).is_absolute():
-            # Check relative to project root or fallback to base yolov8n.pt
-            if not Path(model_path).exists():
-                model_path = "yolov8n.pt"
-        model = YOLO(model_path)
-
+        model = _get_model()
         return _run_with_yolo(model, before_photo_bytes, after_photo_bytes)
     except Exception as e:
         # Graceful fallback if model is unavailable (demo mode)

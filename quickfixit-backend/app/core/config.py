@@ -64,8 +64,9 @@ class Settings(BaseSettings):
     fusion_auto_pass: float = 0.80
     fusion_officer_review: float = 0.50
 
-    # ── YOLO ─────────────────────────────────────────────────────────────────
+    # ── YOLO & Hugging Face ──────────────────────────────────────────────────
     yolo_model_path: str = "models/pothole_yolov8/weights/best.pt"
+    hf_model_repo: str = "RoxieRoller/QuickFixIt-model"
 
     # ── CORS ──────────────────────────────────────────────────────────────────
     # Accepts JSON list string or comma-separated string from .env

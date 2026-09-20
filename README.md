@@ -6,6 +6,7 @@
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.100%2B-green?logo=fastapi)
 ![React](https://img.shields.io/badge/React-18-blue?logo=react)
 ![YOLOv8](https://img.shields.io/badge/YOLOv8-Fine--tuned-orange?logo=pytorch)
+[![Hugging Face](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-QuickFixIt--model-yellow)](https://huggingface.co/RoxieRoller/QuickFixIt-model)
 ![License](https://img.shields.io/badge/License-MIT-yellow)
 
 ---
@@ -63,6 +64,20 @@ Step 5: Repair Detection (YOLO)   → YOLOv8 confirms pothole is filled/repaired
   - 1,002 images from 501 real before/after road repair pairs (custom dataset)
 - **Training**: 25 epochs on GPU
 - **Output**: `best.pt` stored at `quickfixit-backend/models/pothole_yolov8/weights/`
+
+### 🤗 Hugging Face Model Hub
+The trained weights are hosted on Hugging Face:
+- **Model Repo:** [huggingface.co/RoxieRoller/QuickFixIt-model](https://huggingface.co/RoxieRoller/QuickFixIt-model)
+- **Auto-Download:** If `best.pt` is not found locally, the backend automatically downloads the weights directly from Hugging Face Hub!
+- **Standalone Usage:**
+  ```python
+  from ultralytics import YOLO
+  from huggingface_hub import hf_hub_download
+
+  model_path = hf_hub_download(repo_id="RoxieRoller/QuickFixIt-model", filename="best.pt")
+  model = YOLO(model_path)
+  results = model.predict("pothole_image.jpg")
+  ```
 
 ---
 
