@@ -215,11 +215,13 @@ export async function getAssignedJobs() {
 export async function submitRepairAndVerify(complaintId, { photoBlob, gps_lat, gps_lng }) {
   try {
     const fd = new FormData();
-    fd.append('photo', photoBlob, 'after.jpg');
-    fd.append('gps_lat', String(gps_lat));
-    fd.append('gps_lng', String(gps_lng));
+    if (photoBlob) {
+      fd.append('after_photo', photoBlob, 'after.jpg');
+    }
+    fd.append('after_gps_lat', String(gps_lat || 19.076));
+    fd.append('after_gps_lng', String(gps_lng || 72.8777));
 
-    const data = await apiUpload(`/contractor/complaints/${complaintId}/repair`, fd);
+    const data = await apiUpload(`/contractor/jobs/${complaintId}/submit`, fd);
     return _verificationToVerdict(data);
   } catch (err) {
     console.warn('[api] submitRepairAndVerify fallback:', err.message);

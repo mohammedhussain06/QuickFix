@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { MOCK_CONTRACTOR_JOBS } from '../../data/mockData';
 import { submitRepairAndVerify } from '../../services/api';
 
@@ -11,6 +11,36 @@ export default function GhostOverlayCamera({
   const [scenario, setScenario] = useState('genuine'); // 'genuine' | 'different_pothole' | 'wrong_angle' | 'photo_reuse'
   const [isCapturing, setIsCapturing] = useState(false);
   const [verdictResult, setVerdictResult] = useState(null);
+  const [customAfterPhoto, setCustomAfterPhoto] = useState(null);
+  const [customAfterPreview, setCustomAfterPreview] = useState(null);
+  const fileInputRef = useRef(null);
+
+  const handleAfterFileSelect = (e) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setCustomAfterPhoto(file);
+      setCustomAfterPreview(URL.createObjectURL(file));
+      setScenario('genuine');
+    }
+  };
+
+  const loadDemoAfterSample = async (url) => {
+    try {
+      const res = await fetch(url);
+      const blob = await res.blob();
+      setCustomAfterPhoto(blob);
+      setCustomAfterPreview(url);
+      setScenario('genuine');
+    } catch (err) {
+      console.error('Failed to load after demo sample:', err);
+    }
+  };
+
+  const clearCustomAfterPhoto = () => {
+    setCustomAfterPhoto(null);
+    setCustomAfterPreview(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
 
   // Sensor telemetry derived from demo scenario
   const getSensorStatus = () => {
@@ -67,7 +97,7 @@ export default function GhostOverlayCamera({
     const complaintId = job.id;
     let backendVerdict = null;
     if (complaintId) {
-      backendVerdict = await submitRepairAndVerify(complaintId, { photoBlob: null, gps_lat, gps_lng });
+      backendVerdict = await submitRepairAndVerify(complaintId, { photoBlob: customAfterPhoto, gps_lat, gps_lng });
     }
 
     setIsCapturing(false);
@@ -187,14 +217,16 @@ export default function GhostOverlayCamera({
 
       {/* Ghost-Overlay Camera Viewfinder */}
       <div className="relative w-full aspect-[9/14] sm:aspect-[9/16] max-h-[520px] rounded-3xl overflow-hidden shadow-xl bg-black flex flex-col justify-between p-3 border-2 border-[#d7e8c3]">
-        {/* Layer 1: Live Viewfinder (Simulated newly repaired road) */}
+        {/* Layer 1: Live Viewfinder (Simulated newly repaired road or Custom Photo) */}
         <div
-          className="absolute inset-0 w-full h-full bg-cover bg-center"
+          className="absolute inset-0 w-full h-full bg-cover bg-center transition-all duration-300"
           style={{
             backgroundImage: `url('${
-              scenario === 'different_pothole'
-                ? 'https://lh3.googleusercontent.com/aida-public/AB6AXuBhS_lyFD4zIki-hYjRs0J_nj-kUtl-IVmxBC20jIz_3I4baGn5LnFpJbRM3_nmZXkpN0pNOcgWl3GzfVTF1jEBJ6Pzhi_KSxzdBCwqryvn2kI7IWpT3W5CdZ0HLwRIAR-sykN9qkUhz5a6-LLC6nzwPyEjTcWTeR9bfvYd5nLK52kGoGMs2p5aIkb2LG6vKh0r1-1ybH21JX6nXa1FOvOXyjio0lwOb_cAq_489dzWOU_AmH-wPstSKA'
-                : 'https://lh3.googleusercontent.com/aida-public/AB6AXuC0TpDjXqMy-XXPRo3jnGEZX6mNFVQwk4uHkdhs8-Rd9MWdBolqnPAC8HAj4SjbrIJl_qpPDrj7w5a7aKbUyACYce8jSnloSQQv3uQAF_nxrWdlIghUuGqfRKB7mgmDW0uRMHs5bqUTTqomyj1F44Dra3zNiF3YqAKTZWI_v-p2z15d4N-6tGfCjvRy_rfbHapOYLCIDB2_a3QCjyBq-w9dF2Csth_j3tZE2kF1pS22493WeVNH0-x35w'
+              customAfterPreview || (
+                scenario === 'different_pothole'
+                  ? 'https://lh3.googleusercontent.com/aida-public/AB6AXuBhS_lyFD4zIki-hYjRs0J_nj-kUtl-IVmxBC20jIz_3I4baGn5LnFpJbRM3_nmZXkpN0pNOcgWl3GzfVTF1jEBJ6Pzhi_KSxzdBCwqryvn2kI7IWpT3W5CdZ0HLwRIAR-sykN9qkUhz5a6-LLC6nzwPyEjTcWTeR9bfvYd5nLK52kGoGMs2p5aIkb2LG6vKh0r1-1ybH21JX6nXa1FOvOXyjio0lwOb_cAq_489dzWOU_AmH-wPstSKA'
+                  : 'https://lh3.googleusercontent.com/aida-public/AB6AXuC0TpDjXqMy-XXPRo3jnGEZX6mNFVQwk4uHkdhs8-Rd9MWdBolqnPAC8HAj4SjbrIJl_qpPDrj7w5a7aKbUyACYce8jSnloSQQv3uQAF_nxrWdlIghUuGqfRKB7mgmDW0uRMHs5bqUTTqomyj1F44Dra3zNiF3YqAKTZWI_v-p2z15d4N-6tGfCjvRy_rfbHapOYLCIDB2_a3QCjyBq-w9dF2Csth_j3tZE2kF1pS22493WeVNH0-x35w'
+              )
             }')`
           }}
         />
@@ -211,6 +243,24 @@ export default function GhostOverlayCamera({
 
         {/* Top HUD: Live Sensor Alignment Chips */}
         <div className="relative z-20 flex flex-col gap-1.5">
+          {/* Custom Loaded Photo Banner */}
+          {customAfterPreview && (
+            <div className="flex items-center justify-between px-3 py-1.5 rounded-xl bg-black/85 backdrop-blur-md text-white border border-[#a3f69c]/50 text-[11px] font-['Plus_Jakarta_Sans'] font-semibold shadow-md">
+              <span className="flex items-center gap-1.5 text-[#a3f69c]">
+                <span className="material-symbols-outlined text-[15px]">verified</span>
+                <span>Custom After-Photo Loaded</span>
+              </span>
+              <button
+                type="button"
+                onClick={clearCustomAfterPhoto}
+                className="flex items-center gap-0.5 text-white/90 hover:text-white px-2 py-0.5 rounded-md bg-white/20 active:scale-95 transition-transform"
+              >
+                <span className="material-symbols-outlined text-[13px]">close</span>
+                <span>Reset</span>
+              </button>
+            </div>
+          )}
+
           <div className="grid grid-cols-3 gap-1.5">
             {/* GPS Chip */}
             <div
@@ -315,22 +365,104 @@ export default function GhostOverlayCamera({
         </div>
       </div>
 
-      {/* Shutter Capture Button */}
-      <div className="flex flex-col items-center gap-2">
-        <button
-          onClick={handleCapture}
-          disabled={isCapturing}
-          className={`w-20 h-20 rounded-full flex items-center justify-center shadow-2xl active:scale-95 transition-all ${
-            sensors.ready
-              ? 'bg-[#0d631b] hover:bg-[#2e7d32] text-white ring-4 ring-[#a3f69c]/60'
-              : 'bg-red-700 text-white ring-4 ring-red-400/50'
-          } ${isCapturing ? 'animate-pulse scale-90' : ''}`}
-        >
-          <div className="w-16 h-16 rounded-full border-2 border-white/80 flex items-center justify-center">
-            <span className="material-symbols-outlined text-[34px]">photo_camera</span>
-          </div>
-        </button>
-        <span className="text-[11px] font-['Plus_Jakarta_Sans'] font-bold text-[#40493d]">
+      {/* Hidden File Picker for Contractor After-Photo */}
+      <input
+        type="file"
+        ref={fileInputRef}
+        accept="image/*"
+        className="hidden"
+        onChange={handleAfterFileSelect}
+      />
+
+      {/* Quick Demo Repaired Presets */}
+      <div className="flex flex-col gap-1.5 bg-[#ecf6ee]/80 p-2.5 rounded-2xl border border-[#d7e8c3]/60">
+        <div className="flex items-center justify-between px-1">
+          <span className="font-['Plus_Jakarta_Sans'] text-[11px] font-bold text-[#0d631b] flex items-center gap-1">
+            <span className="material-symbols-outlined text-[15px]">bolt</span>
+            Live Demo Repair Presets
+          </span>
+          <span className="font-['Inter'] text-[10px] text-[#40493d]">1-tap asphalt repairs</span>
+        </div>
+        <div className="flex items-center gap-2 overflow-x-auto pb-0.5 no-scrollbar">
+          <button
+            type="button"
+            onClick={() => loadDemoAfterSample('/demo_samples/s01_p01_after.jpg')}
+            className="shrink-0 px-3 py-1.5 rounded-full text-[12px] font-['Plus_Jakarta_Sans'] font-semibold bg-white border border-[#d7e8c3] text-[#151d19] hover:bg-[#d7e8c3]/40 active:scale-95 transition-all shadow-xs flex items-center gap-1"
+          >
+            <span>Repaired 1</span>
+            <span className="text-[10px] text-[#0d631b] font-bold">(Matched)</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => loadDemoAfterSample('/demo_samples/s02_p01_after.jpg')}
+            className="shrink-0 px-3 py-1.5 rounded-full text-[12px] font-['Plus_Jakarta_Sans'] font-semibold bg-white border border-[#d7e8c3] text-[#151d19] hover:bg-[#d7e8c3]/40 active:scale-95 transition-all shadow-xs flex items-center gap-1"
+          >
+            <span>Repaired 2</span>
+            <span className="text-[10px] text-[#0d631b] font-bold">(Fresh Bitumen)</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => loadDemoAfterSample('/demo_samples/s03_p01_after.jpg')}
+            className="shrink-0 px-3 py-1.5 rounded-full text-[12px] font-['Plus_Jakarta_Sans'] font-semibold bg-white border border-[#d7e8c3] text-[#151d19] hover:bg-[#d7e8c3]/40 active:scale-95 transition-all shadow-xs flex items-center gap-1"
+          >
+            <span>Repaired 3</span>
+            <span className="text-[10px] text-[#0d631b] font-bold">(Edge Seal)</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Primary Action Dock */}
+      <div className="p-3.5 rounded-3xl bg-white shadow-sm border border-[#d7e8c3]/60 flex flex-col items-center gap-3">
+        <div className="w-full flex items-center justify-between px-4">
+          {/* Gallery / File Picker */}
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            className="flex flex-col items-center gap-1 text-[#40493d] active:scale-95 transition-transform min-w-[56px]"
+            type="button"
+            title="Upload repair after-photo from device"
+          >
+            <div className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${
+              customAfterPreview ? 'bg-[#0d631b] text-white shadow-md' : 'bg-[#ecf6ee] text-[#151d19]'
+            }`}>
+              <span className="material-symbols-outlined text-[22px]">
+                {customAfterPreview ? 'check' : 'photo_library'}
+              </span>
+            </div>
+            <span className="font-['Plus_Jakarta_Sans'] text-[11px] font-semibold">
+              {customAfterPreview ? 'Change' : 'Upload'}
+            </span>
+          </button>
+
+          {/* Hero Shutter */}
+          <button
+            onClick={handleCapture}
+            disabled={isCapturing}
+            className={`w-20 h-20 rounded-full flex items-center justify-center shadow-2xl active:scale-95 transition-all ${
+              sensors.ready
+                ? 'bg-[#0d631b] hover:bg-[#2e7d32] text-white ring-4 ring-[#a3f69c]/60'
+                : 'bg-red-700 text-white ring-4 ring-red-400/50'
+            } ${isCapturing ? 'animate-pulse scale-90' : ''}`}
+          >
+            <div className="w-16 h-16 rounded-full border-2 border-white/80 flex items-center justify-center">
+              <span className="material-symbols-outlined text-[34px]">photo_camera</span>
+            </div>
+          </button>
+
+          {/* Reset / Live Camera Toggle */}
+          <button
+            onClick={clearCustomAfterPhoto}
+            className="flex flex-col items-center gap-1 text-[#40493d] active:scale-95 transition-transform min-w-[56px]"
+            type="button"
+            title="Reset to default feed"
+          >
+            <div className="w-12 h-12 rounded-full bg-[#ecf6ee] flex items-center justify-center text-[#151d19]">
+              <span className="material-symbols-outlined text-[22px]">refresh</span>
+            </div>
+            <span className="font-['Plus_Jakarta_Sans'] text-[11px] font-semibold">Reset</span>
+          </button>
+        </div>
+
+        <span className="text-[11px] font-['Plus_Jakarta_Sans'] font-bold text-[#40493d] text-center">
           Tap Shutter to Run Multi-Sensor CV Verification
         </span>
       </div>
