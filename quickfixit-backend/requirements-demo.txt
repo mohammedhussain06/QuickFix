@@ -1,0 +1,32 @@
+# QuickFix It — Demo Dependencies
+# Uses flexible version ranges to avoid conflicts with other tools on your machine
+# Install: pip install -r requirements-demo.txt
+
+# ── Web Framework ─────────────────────────────────────────────────────────────
+fastapi>=0.115.2
+uvicorn[standard]>=0.31.1
+python-multipart>=0.0.18
+starlette>=0.40.0
+
+# ── Database (SQLite — no PostgreSQL install needed) ──────────────────────────
+sqlalchemy[asyncio]>=2.0.0
+aiosqlite>=0.20.0
+alembic>=1.13.0
+
+# ── Auth ──────────────────────────────────────────────────────────────────────
+python-jose[cryptography]>=3.3.0
+passlib[bcrypt]>=1.7.4
+
+# ── Computer Vision ───────────────────────────────────────────────────────────
+opencv-python-headless>=4.9.0
+imagehash>=4.3.1
+Pillow>=11.0.0
+numpy>=2.0.0
+ultralytics>=8.2.0
+
+# ── Settings ──────────────────────────────────────────────────────────────────
+pydantic-settings>=2.10.1
+python-dotenv>=1.1.1
+
+# ── Utilities ─────────────────────────────────────────────────────────────────
+email-validator>=2.1.1

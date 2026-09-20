@@ -1,0 +1,13 @@
+# training/dataset.yaml — YOLOv8 dataset configuration
+path: C:/Users/Mohammed Hussain/.gemini/antigravity-ide/scratch/quickfix/quickfixit-backend/datasets/pothole_segmentation   # root dataset directory
+train: images/train
+val: images/val
+test: images/val
+
+nc: 4
+
+names:
+  0: pothole
+  1: road_damage
+  2: road_patch
+  3: intact_road

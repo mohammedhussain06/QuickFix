@@ -1,0 +1,49 @@
+# Python & Bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+ENV/
+
+# Local Environment & Secrets
+.env
+.env.local
+*.env
+
+# Local Database & Storage
+*.db
+*.sqlite
+*.sqlite3
+quickfixit_demo.db
+uploaded_photos/
+
+# Large Datasets & Archives
+datasets/pothole_segmentation/
+datasets/demo_pairs/
+datasets/merged_dataset/
+*.zip
+*.tar.gz
+*.tar
+
+# Model weights (track only our fine-tuned best.pt)
+*.pt
+!models/pothole_yolov8/weights/best.pt
+
+# Training runs & TensorBoard logs
+models/pothole_yolov8/events.out.tfevents.*
+models/pothole_yolov8/args.yaml
+models/pothole_yolov8/weights/last.pt
+models/pothole_yolov8/*.jpg
+models/pothole_yolov8/*.csv
+
+# Temporary files & IDE
+.vscode/
+.idea/
+*.swp
+*~
+powershell.cmd
+.DS_Store

@@ -1,0 +1,106 @@
+version: "3.9"
+
+services:
+
+  # ── PostgreSQL with PostGIS extension ──────────────────────────────────────
+  db:
+    image: postgis/postgis:15-3.3
+    container_name: quickfixit_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-quickfixit}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-quickfixit_secret}
+      POSTGRES_DB: ${POSTGRES_DB:-quickfixit}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-quickfixit}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Redis (cache + Celery broker + token blacklist) ────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: quickfixit_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── MinIO (S3-compatible photo storage) ───────────────────────────────────
+  minio:
+    image: minio/minio:latest
+    container_name: quickfixit_minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin123}
+    ports:
+      - "9000:9000"   # S3 API
+      - "9001:9001"   # Web console
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── FastAPI Application ────────────────────────────────────────────────────
+  app:
+    build: .
+    container_name: quickfixit_app
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./app:/app/app   # hot-reload in dev
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+
+  # ── Celery Worker (runs the CV verification pipeline) ─────────────────────
+  celery_worker:
+    build: .
+    container_name: quickfixit_celery
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - ./app:/app/app
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: celery -A app.tasks.celery_app worker --loglevel=info --concurrency=2
+
+  # ── Celery Flower (monitoring dashboard for tasks) ────────────────────────
+  flower:
+    build: .
+    container_name: quickfixit_flower
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - "5555:5555"
+    depends_on:
+      - redis
+      - celery_worker
+    command: celery -A app.tasks.celery_app flower --port=5555
+
+volumes:
+  postgres_data:
+  minio_data:
