@@ -158,9 +158,56 @@ export default function ReportCamera({
 
 
   return (
-    <div className="flex flex-col w-full pb-8 select-none">
+    <div className="flex flex-col w-full pb-8 select-none gap-3">
+      {/* High-Visibility Upload & Live Demo Bar (Immediately visible on top) */}
+      <div className="bg-white p-3 rounded-2xl border-2 border-[#d7e8c3] shadow-xs flex flex-col gap-2">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-1.5 text-[#0d631b] font-['Plus_Jakarta_Sans'] font-bold text-[13px]">
+            <span className="material-symbols-outlined text-[20px]">photo_library</span>
+            <span>Upload or Pick Test Photo</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            className="px-3.5 py-1.5 rounded-full bg-[#0d631b] text-white text-[12px] font-['Plus_Jakarta_Sans'] font-bold shadow-sm active:scale-95 transition-all flex items-center gap-1.5 hover:bg-[#2e7d32]"
+          >
+            <span className="material-symbols-outlined text-[16px]">upload_file</span>
+            <span>Choose File</span>
+          </button>
+        </div>
+
+        {/* 1-Tap Hackathon Presets */}
+        <div className="flex items-center gap-1.5 pt-1.5 border-t border-[#e6f0e8] overflow-x-auto no-scrollbar">
+          <span className="text-[11px] font-bold text-[#40493d] shrink-0">Presets:</span>
+          <button
+            type="button"
+            onClick={() => loadDemoSample('/demo_samples/s01_p01_before.jpg', 'Severe Pothole')}
+            className="shrink-0 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-[#ecf6ee] text-[#151d19] border border-[#d7e8c3] hover:bg-[#d7e8c3]/60 active:scale-95 transition-all flex items-center gap-1"
+          >
+            <span className="text-[10px] text-[#0d631b] font-bold">Sample 1</span>
+            <span>(Severe)</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => loadDemoSample('/demo_samples/s02_p01_before.jpg', 'Deep Pothole')}
+            className="shrink-0 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-[#ecf6ee] text-[#151d19] border border-[#d7e8c3] hover:bg-[#d7e8c3]/60 active:scale-95 transition-all flex items-center gap-1"
+          >
+            <span className="text-[10px] text-[#0d631b] font-bold">Sample 2</span>
+            <span>(Deep)</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => loadDemoSample('/demo_samples/s03_p01_before.jpg', 'Curb Pothole')}
+            className="shrink-0 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-[#ecf6ee] text-[#151d19] border border-[#d7e8c3] hover:bg-[#d7e8c3]/60 active:scale-95 transition-all flex items-center gap-1"
+          >
+            <span className="text-[10px] text-[#0d631b] font-bold">Sample 3</span>
+            <span>(Rim)</span>
+          </button>
+        </div>
+      </div>
+
       {/* Viewfinder Main Container */}
-      <div className="relative w-full aspect-[9/14] sm:aspect-[9/16] max-h-[580px] rounded-3xl overflow-hidden shadow-xl bg-[#29322d] flex flex-col justify-between p-4 border border-[#d7e8c3]/40">
+      <div className="relative w-full aspect-[4/3] max-h-[360px] rounded-3xl overflow-hidden shadow-xl bg-[#29322d] flex flex-col justify-between p-3.5 border border-[#d7e8c3]/40">
         {/* Background Feed: Video or High-Res Camera Capture */}
         {customPhotoPreview ? (
           <img
@@ -326,43 +373,6 @@ export default function ReportCamera({
             type="button"
           >
             <span className="material-symbols-outlined text-[20px]">grid_on</span>
-          </button>
-        </div>
-      </div>
-
-      {/* Quick Demo Presets (Perfect for Live Presentations) */}
-      <div className="mt-3 flex flex-col gap-1.5 bg-[#ecf6ee]/70 p-2.5 rounded-2xl border border-[#d7e8c3]/60">
-        <div className="flex items-center justify-between px-1">
-          <span className="font-['Plus_Jakarta_Sans'] text-[11px] font-bold text-[#0d631b] flex items-center gap-1">
-            <span className="material-symbols-outlined text-[15px]">bolt</span>
-            Live Demo Presets
-          </span>
-          <span className="font-['Inter'] text-[10px] text-[#40493d]">1-tap road samples</span>
-        </div>
-        <div className="flex items-center gap-2 overflow-x-auto pb-0.5 no-scrollbar">
-          <button
-            type="button"
-            onClick={() => loadDemoSample('/demo_samples/s01_p01_before.jpg', 'Severe Pothole')}
-            className="shrink-0 px-3 py-1.5 rounded-full text-[12px] font-['Plus_Jakarta_Sans'] font-semibold bg-white border border-[#d7e8c3] text-[#151d19] hover:bg-[#d7e8c3]/40 active:scale-95 transition-all shadow-xs flex items-center gap-1"
-          >
-            <span>Sample 1</span>
-            <span className="text-[10px] text-[#0d631b] font-bold">(Severe)</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => loadDemoSample('/demo_samples/s02_p01_before.jpg', 'Deep Pothole')}
-            className="shrink-0 px-3 py-1.5 rounded-full text-[12px] font-['Plus_Jakarta_Sans'] font-semibold bg-white border border-[#d7e8c3] text-[#151d19] hover:bg-[#d7e8c3]/40 active:scale-95 transition-all shadow-xs flex items-center gap-1"
-          >
-            <span>Sample 2</span>
-            <span className="text-[10px] text-[#0d631b] font-bold">(Deep)</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => loadDemoSample('/demo_samples/s03_p01_before.jpg', 'Asphalt Rim')}
-            className="shrink-0 px-3 py-1.5 rounded-full text-[12px] font-['Plus_Jakarta_Sans'] font-semibold bg-white border border-[#d7e8c3] text-[#151d19] hover:bg-[#d7e8c3]/40 active:scale-95 transition-all shadow-xs flex items-center gap-1"
-          >
-            <span>Sample 3</span>
-            <span className="text-[10px] text-[#0d631b] font-bold">(Rim)</span>
           </button>
         </div>
       </div>

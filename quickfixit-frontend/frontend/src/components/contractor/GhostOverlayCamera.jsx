@@ -215,8 +215,55 @@ export default function GhostOverlayCamera({
         </select>
       </div>
 
+      {/* High-Visibility Upload & Live Demo Bar (Immediately visible on top) */}
+      <div className="bg-white p-3 rounded-2xl border-2 border-[#d7e8c3] shadow-xs flex flex-col gap-2">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-1.5 text-[#0d631b] font-['Plus_Jakarta_Sans'] font-bold text-[13px]">
+            <span className="material-symbols-outlined text-[20px]">photo_library</span>
+            <span>Upload or Pick Repaired Photo</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            className="px-3.5 py-1.5 rounded-full bg-[#0d631b] text-white text-[12px] font-['Plus_Jakarta_Sans'] font-bold shadow-sm active:scale-95 transition-all flex items-center gap-1.5 hover:bg-[#2e7d32]"
+          >
+            <span className="material-symbols-outlined text-[16px]">upload_file</span>
+            <span>Choose File</span>
+          </button>
+        </div>
+
+        {/* 1-Tap Hackathon Presets */}
+        <div className="flex items-center gap-1.5 pt-1.5 border-t border-[#e6f0e8] overflow-x-auto no-scrollbar">
+          <span className="text-[11px] font-bold text-[#40493d] shrink-0">Presets:</span>
+          <button
+            type="button"
+            onClick={() => loadDemoAfterSample('/demo_samples/s01_p01_after.jpg')}
+            className="shrink-0 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-[#ecf6ee] text-[#151d19] border border-[#d7e8c3] hover:bg-[#d7e8c3]/60 active:scale-95 transition-all flex items-center gap-1"
+          >
+            <span className="text-[10px] text-[#0d631b] font-bold">Repaired 1</span>
+            <span>(Matched)</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => loadDemoAfterSample('/demo_samples/s02_p01_after.jpg')}
+            className="shrink-0 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-[#ecf6ee] text-[#151d19] border border-[#d7e8c3] hover:bg-[#d7e8c3]/60 active:scale-95 transition-all flex items-center gap-1"
+          >
+            <span className="text-[10px] text-[#0d631b] font-bold">Repaired 2</span>
+            <span>(Fresh)</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => loadDemoAfterSample('/demo_samples/s03_p01_after.jpg')}
+            className="shrink-0 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-[#ecf6ee] text-[#151d19] border border-[#d7e8c3] hover:bg-[#d7e8c3]/60 active:scale-95 transition-all flex items-center gap-1"
+          >
+            <span className="text-[10px] text-[#0d631b] font-bold">Repaired 3</span>
+            <span>(Rim)</span>
+          </button>
+        </div>
+      </div>
+
       {/* Ghost-Overlay Camera Viewfinder */}
-      <div className="relative w-full aspect-[9/14] sm:aspect-[9/16] max-h-[520px] rounded-3xl overflow-hidden shadow-xl bg-black flex flex-col justify-between p-3 border-2 border-[#d7e8c3]">
+      <div className="relative w-full aspect-[4/3] max-h-[350px] rounded-3xl overflow-hidden shadow-xl bg-black flex flex-col justify-between p-3 border-2 border-[#d7e8c3]">
         {/* Layer 1: Live Viewfinder (Simulated newly repaired road or Custom Photo) */}
         <div
           className="absolute inset-0 w-full h-full bg-cover bg-center transition-all duration-300"
@@ -373,43 +420,6 @@ export default function GhostOverlayCamera({
         className="hidden"
         onChange={handleAfterFileSelect}
       />
-
-      {/* Quick Demo Repaired Presets */}
-      <div className="flex flex-col gap-1.5 bg-[#ecf6ee]/80 p-2.5 rounded-2xl border border-[#d7e8c3]/60">
-        <div className="flex items-center justify-between px-1">
-          <span className="font-['Plus_Jakarta_Sans'] text-[11px] font-bold text-[#0d631b] flex items-center gap-1">
-            <span className="material-symbols-outlined text-[15px]">bolt</span>
-            Live Demo Repair Presets
-          </span>
-          <span className="font-['Inter'] text-[10px] text-[#40493d]">1-tap asphalt repairs</span>
-        </div>
-        <div className="flex items-center gap-2 overflow-x-auto pb-0.5 no-scrollbar">
-          <button
-            type="button"
-            onClick={() => loadDemoAfterSample('/demo_samples/s01_p01_after.jpg')}
-            className="shrink-0 px-3 py-1.5 rounded-full text-[12px] font-['Plus_Jakarta_Sans'] font-semibold bg-white border border-[#d7e8c3] text-[#151d19] hover:bg-[#d7e8c3]/40 active:scale-95 transition-all shadow-xs flex items-center gap-1"
-          >
-            <span>Repaired 1</span>
-            <span className="text-[10px] text-[#0d631b] font-bold">(Matched)</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => loadDemoAfterSample('/demo_samples/s02_p01_after.jpg')}
-            className="shrink-0 px-3 py-1.5 rounded-full text-[12px] font-['Plus_Jakarta_Sans'] font-semibold bg-white border border-[#d7e8c3] text-[#151d19] hover:bg-[#d7e8c3]/40 active:scale-95 transition-all shadow-xs flex items-center gap-1"
-          >
-            <span>Repaired 2</span>
-            <span className="text-[10px] text-[#0d631b] font-bold">(Fresh Bitumen)</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => loadDemoAfterSample('/demo_samples/s03_p01_after.jpg')}
-            className="shrink-0 px-3 py-1.5 rounded-full text-[12px] font-['Plus_Jakarta_Sans'] font-semibold bg-white border border-[#d7e8c3] text-[#151d19] hover:bg-[#d7e8c3]/40 active:scale-95 transition-all shadow-xs flex items-center gap-1"
-          >
-            <span>Repaired 3</span>
-            <span className="text-[10px] text-[#0d631b] font-bold">(Edge Seal)</span>
-          </button>
-        </div>
-      </div>
 
       {/* Primary Action Dock */}
       <div className="p-3.5 rounded-3xl bg-white shadow-sm border border-[#d7e8c3]/60 flex flex-col items-center gap-3">
