@@ -956,7 +956,7 @@
     // ==========================================
     // 2. COMPONENT: CONTRACTOR JOB FEED
     // ==========================================
-    function ContractorJobFeed({ onSelectJob, setActiveScreen, onLogout, lang, setLang, t }) {
+    function ContractorJobFeed({ jobs = MOCK_CONTRACTOR_JOBS, onSelectJob, setActiveScreen, onLogout, lang, setLang, t }) {
       const [filter, setFilter] = useState('all');
       const [countdown, setCountdown] = useState(6480);
       const [specsJob, setSpecsJob] = useState(null);
@@ -973,7 +973,15 @@
         return `${h}h ${m}m ${sec < 10 ? '0' : ''}${sec}s`;
       };
 
-      const filtered = MOCK_CONTRACTOR_JOBS.filter(j => {
+      const allJobs = jobs || MOCK_CONTRACTOR_JOBS;
+      const activeJobsList = allJobs.filter(j => j.status !== 'PAID & CLOSED');
+      const criticalCount = activeJobsList.filter(j => j.priority === 'CRITICAL').length;
+      const totalEscrow = activeJobsList.reduce((sum, j) => {
+        const val = parseInt((j.payout || '12000').replace(/[^0-9]/g, ''), 10) || 12000;
+        return sum + val;
+      }, 0);
+
+      const filtered = allJobs.filter(j => {
         if (filter === 'critical') return j.priority === 'CRITICAL';
         if (filter === 'standard') return j.priority === 'STANDARD';
         return true;
@@ -1020,7 +1028,7 @@
           <section className="grid grid-cols-3 gap-2.5">
             <div className="flex flex-col p-3 rounded-2xl bg-[#ecf6ee] border border-[#d7e8c3]/60 shadow-xs">
               <span className="text-[11px] font-['Plus_Jakarta_Sans'] font-bold text-[#546346] uppercase">Active Jobs</span>
-              <span className="font-['Plus_Jakarta_Sans'] text-[22px] font-bold text-[#0d631b] mt-0.5">3</span>
+              <span className="font-['Plus_Jakarta_Sans'] text-[22px] font-bold text-[#0d631b] mt-0.5">{activeJobsList.length}</span>
               <span className="text-[10px] text-[#40493d]">Ward 14 & K-West</span>
             </div>
 
@@ -1028,13 +1036,13 @@
               <span className="text-[11px] font-['Plus_Jakarta_Sans'] font-bold text-[#ba1a1a] uppercase flex items-center gap-0.5">
                 <span className="material-symbols-outlined text-[13px]">timer</span> Urgent SLA
               </span>
-              <span className="font-['Plus_Jakarta_Sans'] text-[22px] font-bold text-[#ba1a1a] mt-0.5">1</span>
+              <span className="font-['Plus_Jakarta_Sans'] text-[22px] font-bold text-[#ba1a1a] mt-0.5">{criticalCount}</span>
               <span className="text-[10px] text-[#93000a]">&lt; 2h Left</span>
             </div>
 
             <div className="flex flex-col p-3 rounded-2xl bg-[#d7e8c3] border border-[#bfcaba] shadow-xs">
               <span className="text-[11px] font-['Plus_Jakarta_Sans'] font-bold text-[#121f08] uppercase">Queued Escrow</span>
-              <span className="font-['Plus_Jakarta_Sans'] text-[18px] font-bold text-[#121f08] mt-1">₹48,000</span>
+              <span className="font-['Plus_Jakarta_Sans'] text-[18px] font-bold text-[#121f08] mt-1">₹{totalEscrow.toLocaleString('en-IN')}</span>
               <span className="text-[10px] text-[#3d4b30]">Pay-on-Verification</span>
             </div>
           </section>
@@ -1081,6 +1089,12 @@
                     }`}>
                       {job.priority} SLA
                     </span>
+                    {job.status === 'REWORK REQUIRED' && (
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-['Plus_Jakarta_Sans'] font-bold bg-[#ba1a1a] text-white animate-pulse flex items-center gap-1">
+                        <span className="material-symbols-outlined text-[12px]">warning</span>
+                        <span>REWORK REQUIRED</span>
+                      </span>
+                    )}
                   </div>
                   <span className="font-['Plus_Jakarta_Sans'] text-[13px] font-bold text-[#0d631b]">{job.payout} Payout</span>
                 </div>
@@ -1113,17 +1127,29 @@
                   </button>
 
                   <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        onSelectJob(job);
-                        setActiveScreen('contractor-camera');
-                      }}
-                      className="px-4 py-2 rounded-full bg-[#0d631b] hover:bg-[#2e7d32] text-white font-['Plus_Jakarta_Sans'] text-[13px] font-bold shadow-sm active:scale-95 transition-all flex items-center gap-1.5"
-                    >
-                      <span className="material-symbols-outlined text-[17px]">photo_camera</span>
-                      <span>{t.startRepairProof}</span>
-                    </button>
+                    {job.status === 'VERIFIED & COMPLETED' ? (
+                      <span className="px-3.5 py-1.5 rounded-full bg-[#d7e8c3] text-[#0d631b] font-['Plus_Jakarta_Sans'] text-[11px] font-bold flex items-center gap-1 shadow-xs">
+                        <span className="material-symbols-outlined text-[15px]">verified</span>
+                        <span>AI Verified • Escrow Pending</span>
+                      </span>
+                    ) : job.status === 'PAID & CLOSED' ? (
+                      <span className="px-3.5 py-1.5 rounded-full bg-[#2e7d32] text-white font-['Plus_Jakarta_Sans'] text-[11px] font-bold flex items-center gap-1 shadow-xs">
+                        <span className="material-symbols-outlined text-[15px]">task_alt</span>
+                        <span>Paid & Closed</span>
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onSelectJob(job);
+                          setActiveScreen('contractor-camera');
+                        }}
+                        className="px-4 py-2 rounded-full bg-[#0d631b] hover:bg-[#2e7d32] text-white font-['Plus_Jakarta_Sans'] text-[13px] font-bold shadow-sm active:scale-95 transition-all flex items-center gap-1.5"
+                      >
+                        <span className="material-symbols-outlined text-[17px]">photo_camera</span>
+                        <span>{t.startRepairProof}</span>
+                      </button>
+                    )}
                   </div>
                 </div>
               </article>
@@ -1196,7 +1222,7 @@
     // ==========================================
     // 3. COMPONENT: GHOST OVERLAY CAMERA
     // ==========================================
-    function GhostOverlayCamera({ job = MOCK_CONTRACTOR_JOBS[0], setActiveScreen, t }) {
+    function GhostOverlayCamera({ job = MOCK_CONTRACTOR_JOBS[0], setActiveScreen, t, onSubmitProof }) {
       const [opacity, setOpacity] = useState(45);
       const [scenario, setScenario] = useState('genuine');
       const [isCapturing, setIsCapturing] = useState(false);
@@ -1358,7 +1384,7 @@
         setTimeout(() => {
           setIsCapturing(false);
           if (scenario === 'genuine') {
-            setVerdictResult({
+            const verdict = {
               status: 'pass',
               title: 'Auto-Verification Passed',
               score: '98.4%',
@@ -1370,7 +1396,11 @@
                 { name: 'Background Landmark SIFT', res: '94% Keypoint Invariance', passed: true },
                 { name: 'Road Patch Segment', res: 'YOLOv8 Level Patch Confirmed', passed: true }
               ]
-            });
+            };
+            setVerdictResult(verdict);
+            if (onSubmitProof) {
+              onSubmitProof(job.id, verdict);
+            }
           } else if (scenario === 'different_pothole') {
             setVerdictResult({
               status: 'reject',
@@ -1803,10 +1833,14 @@
                 <div className="flex flex-col gap-2">
                   {verdictResult.status === 'pass' ? (
                     <button
-                      onClick={() => { setVerdictResult(null); setActiveScreen('contractor-scorecard'); }}
+                      onClick={() => {
+                        if (onSubmitProof) onSubmitProof(job.id, verdictResult);
+                        setVerdictResult(null);
+                        setActiveScreen('contractor-jobs');
+                      }}
                       className="w-full py-3 rounded-full bg-[#0d631b] hover:bg-[#2e7d32] text-white font-['Plus_Jakarta_Sans'] text-[14px] font-bold shadow-md flex items-center justify-center gap-1.5"
                     >
-                      <span>View Payout & Scorecard</span>
+                      <span>Return to Jobs Feed & Review Status</span>
                       <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
                     </button>
                   ) : (
@@ -2304,7 +2338,7 @@
       );
     }
 
-    function CivicHome({ setActiveScreen, setSelectedIncident, selectedWard, t }) {
+    function CivicHome({ setActiveScreen, setSelectedIncident, selectedWard, t, userReports = [], feedItems = MOCK_FEED_ITEMS }) {
       const [helpfulGiven, setHelpfulGiven] = useState({});
       const [sawTooGiven, setSawTooGiven] = useState({});
 
@@ -2312,6 +2346,9 @@
         setSelectedIncident(item);
         setActiveScreen('detail');
       };
+
+      const inProgressCount = userReports.filter(r => r.statusType !== 'completed').length;
+      const fixedCount = 18 + userReports.filter(r => r.statusType === 'completed').length;
 
       return (
         <div className="flex flex-col gap-5 pt-2 pb-28">
@@ -2343,8 +2380,9 @@
 
               <button
                 id="quickReportBtn"
+                type="button"
                 onClick={() => setActiveScreen('report')}
-                className="group relative flex items-center justify-between w-full p-4 rounded-2xl bg-[#2e7d32] hover:bg-[#0d631b] active:scale-[0.98] transition-all text-white shadow-[0_10px_20px_rgba(46,125,50,0.28)]"
+                className="group flex items-center justify-between p-3.5 rounded-2xl bg-[#0d631b] text-white shadow-lg hover:bg-[#2e7d32] active:scale-98 transition-all"
               >
                 <div className="flex items-center gap-3">
                   <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-white/20 backdrop-blur-sm text-white">
@@ -2372,7 +2410,7 @@
                 <span className="material-symbols-outlined text-[#0d631b] text-[20px]">person_pin_circle</span>
                 <span className="w-1.5 h-1.5 rounded-full bg-[#0d631b]"></span>
               </div>
-              <span className="font-['Plus_Jakarta_Sans'] text-[20px] font-bold text-[#0d631b]">3</span>
+              <span className="font-['Plus_Jakarta_Sans'] text-[20px] font-bold text-[#0d631b]">{userReports.length}</span>
               <span className="font-['Plus_Jakarta_Sans'] text-[11px] font-bold text-[#40493d] mt-0.5">{t.reportedByYou}</span>
             </button>
 
@@ -2385,7 +2423,7 @@
                 <span className="material-symbols-outlined text-[#465860] text-[20px]">pending_actions</span>
                 <span className="w-1.5 h-1.5 rounded-full bg-[#465860]"></span>
               </div>
-              <span className="font-['Plus_Jakarta_Sans'] text-[20px] font-bold text-[#465860]">2</span>
+              <span className="font-['Plus_Jakarta_Sans'] text-[20px] font-bold text-[#465860]">{inProgressCount}</span>
               <span className="font-['Plus_Jakarta_Sans'] text-[11px] font-bold text-[#40493d] mt-0.5">{t.inProgress}</span>
             </button>
 
@@ -2398,7 +2436,7 @@
                 <span className="material-symbols-outlined text-[#0d631b] text-[20px]">task_alt</span>
                 <span className="w-1.5 h-1.5 rounded-full bg-[#0d631b]"></span>
               </div>
-              <span className="font-['Plus_Jakarta_Sans'] text-[20px] font-bold text-[#121f08]">18</span>
+              <span className="font-['Plus_Jakarta_Sans'] text-[20px] font-bold text-[#121f08]">{fixedCount}</span>
               <span className="font-['Plus_Jakarta_Sans'] text-[11px] font-bold text-[#3d4b30] mt-0.5">{t.fixedInWard}</span>
             </button>
           </section>
@@ -2417,7 +2455,7 @@
             </div>
 
             <div className="flex flex-col gap-3">
-              {MOCK_FEED_ITEMS.map((item) => {
+              {(feedItems || MOCK_FEED_ITEMS).map((item) => {
                 const isHelpful = helpfulGiven[item.id];
                 const isSawToo = sawTooGiven[item.id];
                 return (
@@ -3690,10 +3728,38 @@
       }
     ];
 
-    function MunicipalPortal({ onLogout, lang, setLang, t, onSwitchRole }) {
+    function MunicipalPortal({
+      onLogout,
+      lang,
+      setLang,
+      t,
+      onSwitchRole,
+      docketsList: propDocketsList,
+      setDocketsList: propSetDocketsList,
+      onApproveDocket,
+      onRejectDocket,
+      auditBlocks: propAuditBlocks,
+      setAuditBlocks: propSetAuditBlocks,
+      contractorsList: propContractorsList,
+      setContractorsList: propSetContractorsList,
+      liveAlert
+    }) {
       const [activeTab, setActiveTab] = useState('review-queue');
-      const [docketsList, setDocketsList] = useState(TRIAGE_QUEUE_DATA);
-      const [selectedDocket, setSelectedDocket] = useState(TRIAGE_QUEUE_DATA[0]);
+      const [localDocketsList, setLocalDocketsList] = useState(TRIAGE_QUEUE_DATA);
+      const docketsList = propDocketsList || localDocketsList;
+      const setDocketsList = propSetDocketsList || setLocalDocketsList;
+      const [selectedDocket, setSelectedDocket] = useState(docketsList[0] || TRIAGE_QUEUE_DATA[0]);
+
+      useEffect(() => {
+        if (docketsList && docketsList.length > 0) {
+          setSelectedDocket(prev => {
+            if (!prev) return docketsList[0];
+            const found = docketsList.find(d => d.id === prev.id || d.rawId === prev.rawId);
+            return found || docketsList[0];
+          });
+        }
+      }, [docketsList]);
+
       const [searchFilter, setSearchFilter] = useState('');
       const [queueFilter, setQueueFilter] = useState('all');
       const [actionNotice, setActionNotice] = useState(null);
@@ -3916,29 +3982,24 @@
 
       const handleApprove = () => {
         if (!selectedDocket) return;
-        const newBlock = {
-          block: 1430 + auditBlocks.length,
-          hash: `c8${Math.random().toString(16).substring(2, 8)}4f9${Math.random().toString(16).substring(2, 8)}`,
-          event: "OFFICER_SIGN_OFF",
-          actor: "Elena Rostova (ID-84)",
-          docket: selectedDocket.id,
-          time: "Just now",
-          status: "VALIDATED",
-          zkp: "Groth16 Valid"
-        };
-        setDocketsList(prev => prev.map(d => d.id === selectedDocket.id ? { ...d, status: 'Approved', matchColor: 'emerald' } : d));
-        setSelectedDocket(prev => ({ ...prev, status: 'Approved' }));
-        setAuditBlocks(prev => [newBlock, ...prev]);
+        if (onApproveDocket) {
+          onApproveDocket(selectedDocket.id);
+        }
+        setDocketsList(prev => prev.map(d => (d.id === selectedDocket.id || d.rawId === selectedDocket.rawId) ? { ...d, status: 'Approved', matchColor: 'emerald' } : d));
+        setSelectedDocket(prev => ({ ...prev, status: 'Approved', matchColor: 'emerald' }));
         setActionNotice({
           type: 'approved',
-          msg: `Docket ${selectedDocket.id} Approved! Payout authorized for ${selectedDocket.contractor}. Merkle Block #${newBlock.block} cryptographically sealed.`
+          msg: `Docket ${selectedDocket.id} Approved! Payout of ₹12,000 authorized for ${selectedDocket.contractor}. Merkle Block cryptographically sealed.`
         });
         setTimeout(() => setActionNotice(null), 6000);
       };
 
       const handleRework = () => {
         if (!selectedDocket) return;
-        setDocketsList(prev => prev.map(d => d.id === selectedDocket.id ? { ...d, status: 'Rework Required' } : d));
+        if (onRejectDocket) {
+          onRejectDocket(selectedDocket.id);
+        }
+        setDocketsList(prev => prev.map(d => (d.id === selectedDocket.id || d.rawId === selectedDocket.rawId) ? { ...d, status: 'Rework Required', matchColor: 'red' } : d));
         setSelectedDocket(prev => ({ ...prev, status: 'Rework Required' }));
         setActionNotice({
           type: 'rework',
@@ -3949,7 +4010,10 @@
 
       const handleRejectClaim = () => {
         if (!selectedDocket) return;
-        setDocketsList(prev => prev.map(d => d.id === selectedDocket.id ? { ...d, status: 'Rejected & Fined', matchColor: 'red' } : d));
+        if (onRejectDocket) {
+          onRejectDocket(selectedDocket.id);
+        }
+        setDocketsList(prev => prev.map(d => (d.id === selectedDocket.id || d.rawId === selectedDocket.rawId) ? { ...d, status: 'Rejected & Fined', matchColor: 'red' } : d));
         setSelectedDocket(prev => ({ ...prev, status: 'Rejected & Fined', matchColor: 'red' }));
         setActionNotice({
           type: 'rework',
@@ -4160,7 +4224,16 @@
           </aside>
 
           {/* 2. MAIN WORKSPACE */}
-          <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
+          <div className="flex-1 flex flex-col min-w-0 overflow-y-auto relative">
+            {liveAlert && (
+              <div className="fixed top-3 right-6 z-[9999] max-w-lg px-4 py-3 rounded-2xl bg-[#0d631b] text-white shadow-2xl border-2 border-[#a3f69c] flex items-center gap-3 animate-in fade-in slide-in-from-top-4 duration-300">
+                <span className="material-symbols-outlined text-[20px] text-[#a3f69c] animate-pulse">sync</span>
+                <div className="flex flex-col min-w-0 flex-1">
+                  <span className="text-[10px] uppercase font-bold tracking-wider text-[#a3f69c]">Cross-Panel Live Sync</span>
+                  <span className="text-[12px] font-semibold leading-tight">{liveAlert.text}</span>
+                </div>
+              </div>
+            )}
             <header className="h-16 bg-white border-b border-[#e0ece2] px-6 flex items-center justify-between sticky top-0 z-40">
               <div className="flex items-center gap-4 flex-1 max-w-xl">
                 <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-[#f0f6f1] text-[#1b5e20] text-[12px] font-bold shrink-0">
@@ -6326,7 +6399,7 @@
     // ==========================================
     // 9. MOBILE APP SHELL (Authentic Smartphone Mockup on Desktop, 100% Native Mobile App UI)
     // ==========================================
-    function MobileAppShell({ children, activeRole, onSwitchRole }) {
+    function MobileAppShell({ children, activeRole, onSwitchRole, liveAlert }) {
       const [time, setTime] = useState(() => {
         const d = new Date();
         const hrs = d.getHours();
@@ -6423,6 +6496,15 @@
 
             {/* Screen Viewport: Inner Phone Content */}
             <div className="flex-1 flex flex-col overflow-hidden bg-[#f2fcf4] relative">
+              {liveAlert && (
+                <div className="absolute top-2 left-3 right-3 z-50 p-2.5 rounded-2xl bg-[#0d631b] text-white shadow-xl border border-[#a3f69c] flex items-center gap-2 animate-in fade-in slide-in-from-top-3 duration-300">
+                  <span className="material-symbols-outlined text-[18px] text-[#a3f69c] animate-pulse">sync</span>
+                  <div className="flex flex-col min-w-0 flex-1">
+                    <span className="text-[9px] uppercase font-bold tracking-wider text-[#a3f69c]">Cross-Panel Live Sync</span>
+                    <span className="text-[11px] font-semibold leading-tight">{liveAlert.text}</span>
+                  </div>
+                </div>
+              )}
               {children}
             </div>
 
@@ -6445,9 +6527,48 @@
       const [selectedWard, setSelectedWard] = useState(WARDS_LIST[0]);
       const [selectedIncident, setSelectedIncident] = useState(MOCK_INCIDENT_DETAIL);
       const [selectedJob, setSelectedJob] = useState(MOCK_CONTRACTOR_JOBS[0]);
+
+      // ── Live Unified Cross-Panel Collections ──
       const [userReports, setUserReports] = useState([]);
+      const [contractorJobs, setContractorJobs] = useState(MOCK_CONTRACTOR_JOBS);
+      const [docketsList, setDocketsList] = useState(TRIAGE_QUEUE_DATA);
+      const [feedItems, setFeedItems] = useState(MOCK_FEED_ITEMS);
+      const [auditBlocks, setAuditBlocks] = useState([
+        { block: 1429, hash: "e7a4f9104c89a01f92e42b109f01", event: "OFFICER_SIGN_OFF", actor: "Elena Rostova (ID-84)", docket: "#CF-8429", time: "2 mins ago", status: "VALIDATED", zkp: "Groth16 Valid" },
+        { block: 1428, hash: "3d18e9842fbc401eb40182903b91", event: "AI_HOMOGRAPHY_MATCH", actor: "CV Engine v2.4", docket: "#CF-8429", time: "14 mins ago", status: "VALIDATED", zkp: "Keypoints 3/3 Locked" },
+        { block: 1427, hash: "11e9a21bcf87c55e7c55891a201c", event: "CONTRACTOR_PROOF_SUBMIT", actor: "Apex Paving (Rajesh Shinde)", docket: "#CF-8429", time: "22 mins ago", status: "VALIDATED", zkp: "GPS & Compass Locked" },
+        { block: 1426, hash: "9a21bcf87c55e3188f7b31049921", event: "CITIZEN_REPORT_SUBMIT", actor: "Maya S. (Citizen)", docket: "#CF-8429", time: "2 days ago", status: "VALIDATED", zkp: "Mobile Attestation" },
+        { block: 1425, hash: "84a1e9b201f893ca192be771894a", event: "OFFICER_SIGN_OFF", actor: "Elena Rostova (ID-84)", docket: "#CF-8428", time: "3 days ago", status: "VALIDATED", zkp: "Groth16 Valid" }
+      ]);
+      const [contractorsList, setContractorsList] = useState([
+        {
+          id: "APEX-01",
+          name: "Apex Paving Ltd.",
+          lead: "Rajesh Shinde",
+          crew: "Crew #4",
+          avatar: "./rajesh_shinde.jpg",
+          tier: "Tier 1 Verified",
+          rating: "4.9 / 5.0",
+          slaRate: 96.8,
+          completed: 142,
+          firstPassRate: 98.4,
+          avgResponse: "14.2h",
+          payoutTotal: "₹14,80,000",
+          penalties: "₹0",
+          status: "Good Standing",
+          statusType: "good",
+          ward: "Ward 14 • Maplewood",
+          phone: "+91 98334 10294"
+        }
+      ]);
+      const [liveAlert, setLiveAlert] = useState(null);
 
       const t = TRANSLATIONS[lang] || TRANSLATIONS.en;
+
+      const triggerAlert = (text, type = 'info') => {
+        setLiveAlert({ text, type });
+        setTimeout(() => setLiveAlert(null), 6000);
+      };
 
       const handleLogin = (user) => {
         setCurrentUser(user);
@@ -6478,14 +6599,249 @@
         }
       };
 
+      // ── 1. Citizen Submits Report (Reflects in Contractor Feed & Municipal Triage) ──
       const addNewReport = (newIncident) => {
         setUserReports(p => [newIncident, ...p]);
         setSelectedIncident(newIncident);
+
+        // A. Automatically generate a Work Order in Contractor Job Feed
+        const newJob = {
+          id: 'WO-' + newIncident.id.replace('CF-', ''),
+          complaintId: newIncident.id,
+          title: newIncident.title || 'Road Surface Hazard',
+          address: newIncident.address,
+          priority: 'CRITICAL',
+          slaHours: 6,
+          payout: '₹12,000',
+          status: 'PENDING REPAIR',
+          citizenPhoto: newIncident.beforeImage,
+          reportedTime: 'Just now',
+          roadClass: 'Arterial Road',
+          distance: '0.3 km away',
+          coordinates: '19.0760° N, 72.8777° E',
+          defectType: newIncident.title ? newIncident.title.split(' ')[0] : 'Pothole',
+          reporterName: newIncident.reporter
+        };
+        setContractorJobs(prev => [newJob, ...prev]);
+
+        // B. Automatically route complaint into Municipal Review Docket
+        const newDocket = {
+          id: '#' + newIncident.id,
+          rawId: newIncident.id,
+          matchScore: '97.8% Baseline',
+          matchColor: 'emerald',
+          defect: newIncident.title || 'Pothole Defect',
+          address: newIncident.address,
+          ward: selectedWard,
+          contractor: 'Apex Paving Ltd. (Rajesh Shinde)',
+          timeReported: 'Just now',
+          timeRepaired: 'Pending Dispatch',
+          status: 'Pending Verification',
+          beforeImage: newIncident.beforeImage,
+          afterImage: newIncident.afterImage || newIncident.beforeImage,
+          confidence: newIncident.confidence || 97.8,
+          anchors: [
+            { x1: 30, y1: 42, x2: 32, y2: 43 },
+            { x1: 70, y1: 38, x2: 72, y2: 39 },
+            { x1: 50, y1: 65, x2: 52, y2: 66 }
+          ],
+          metrics: {
+            siftScore: '97.8%',
+            homographyDelta: 'Δ 2.4°',
+            orbInvariance: '98%',
+            gpsRadius: '1.2m'
+          },
+          auditHash: '9a21bcf' + Math.random().toString(16).substring(2, 8) + '...'
+        };
+        setDocketsList(prev => [newDocket, ...prev]);
+
+        // C. Prepend to Neighborhood Live Feed
+        const newFeed = {
+          id: newIncident.id,
+          type: 'verified',
+          badge: 'Reported & Verified',
+          timeAgo: 'Just now',
+          title: newIncident.title,
+          address: newIncident.address,
+          beforeImage: newIncident.beforeImage,
+          afterImage: newIncident.afterImage,
+          confidence: newIncident.confidence || 97.8,
+          status: newIncident.status,
+          metrics: newIncident.metrics,
+          timeline: newIncident.timeline
+        };
+        setFeedItems(prev => [newFeed, ...prev]);
+
+        // D. Create new Audit Block
+        const newBlock = {
+          block: 1430 + auditBlocks.length,
+          hash: '9a' + Math.random().toString(16).substring(2, 10) + '...b91',
+          event: 'CITIZEN_REPORT_SUBMIT',
+          actor: 'Elena Vasquez (Citizen ID-42)',
+          docket: '#' + newIncident.id,
+          time: 'Just now',
+          status: 'VALIDATED',
+          zkp: 'Mobile Attestation Valid'
+        };
+        setAuditBlocks(prev => [newBlock, ...prev]);
+
+        triggerAlert(`⚡ LIVE SYNC: Report #${newIncident.id} routed to Municipal Triage & dispatched to Contractor Rajesh Shinde!`);
+      };
+
+      // ── 2. Contractor Submits Proof (Reflects in Municipal Review & Citizen Timeline) ──
+      const handleContractorSubmitProof = (jobId, proofData) => {
+        const afterImg = proofData.capturedImage || "./demo_samples/s01_p01_after.jpg";
+
+        // A. Update Contractor Jobs
+        setContractorJobs(prev => prev.map(j => {
+          if (j.id === jobId || j.complaintId === jobId || ('#' + j.complaintId) === jobId || ('WO-' + jobId.replace(/[^0-9]/g, '')) === j.id) {
+            return {
+              ...j,
+              status: 'VERIFIED & COMPLETED',
+              repairedPhoto: afterImg,
+              verifiedAt: 'Just now'
+            };
+          }
+          return j;
+        }));
+
+        // B. Update Municipal Review Queue with proof & high match score
+        setDocketsList(prev => prev.map(d => {
+          if (d.id === jobId || d.rawId === jobId || d.id === ('#' + jobId) || ('WO-' + d.rawId.replace(/[^0-9]/g, '')) === jobId || jobId.includes(d.rawId)) {
+            return {
+              ...d,
+              status: 'AI-Verified: Ready for Escrow Release',
+              afterImage: afterImg,
+              matchScore: proofData.score || '98.4% Match',
+              matchColor: 'emerald',
+              timeRepaired: 'Just now'
+            };
+          }
+          return d;
+        }));
+
+        // C. Update Citizen Reports, Neighborhood Feed, & Active Incident
+        const updateInc = (inc) => {
+          if (inc.id === jobId || ('#' + inc.id) === jobId || ('WO-' + inc.id.replace(/[^0-9]/g, '')) === jobId || jobId.includes(inc.id)) {
+            const updatedTimeline = (inc.timeline || []).map(item => {
+              if (item.title.includes('Contractor Repaired')) return { ...item, completed: true, date: 'Just now • Repaired by Apex Crew #4' };
+              if (item.title.includes('AI Telemetry Verified')) return { ...item, completed: true, date: 'Just now • 98.4% Homography Match' };
+              return item;
+            });
+            return {
+              ...inc,
+              status: 'Contractor Repaired & AI-Verified',
+              statusType: 'verified',
+              repairedDate: 'Just now by Apex Crew #4',
+              afterImage: afterImg,
+              timeline: updatedTimeline
+            };
+          }
+          return inc;
+        };
+        setUserReports(prev => prev.map(updateInc));
+        setFeedItems(prev => prev.map(updateInc));
+        setSelectedIncident(prev => prev ? updateInc(prev) : prev);
+
+        // D. Create Audit Block
+        const newBlock = {
+          block: 1430 + auditBlocks.length,
+          hash: '3d' + Math.random().toString(16).substring(2, 10) + '...f01',
+          event: 'CONTRACTOR_PROOF_SUBMIT',
+          actor: 'Apex Paving (Rajesh Shinde)',
+          docket: jobId.startsWith('#') ? jobId : '#' + jobId,
+          time: 'Just now',
+          status: 'VALIDATED',
+          zkp: 'Keypoints 3/3 Locked • Depth 100%'
+        };
+        setAuditBlocks(prev => [newBlock, ...prev]);
+
+        triggerAlert(`⚡ LIVE SYNC: Repair proof uploaded for ${jobId}! Dual evidence ready in Municipal Portal.`);
+      };
+
+      // ── 3. Municipal Officer Approves Docket (Payout Released & Citizen Ticket Closed) ──
+      const handleMunicipalApprove = (docketId) => {
+        // A. Update Municipal Queue
+        setDocketsList(prev => prev.map(d => (d.id === docketId || d.rawId === docketId) ? { ...d, status: 'Approved', matchColor: 'emerald' } : d));
+
+        // B. Mark Contractor Job Paid & Closed
+        setContractorJobs(prev => prev.map(j => {
+          if (j.id === docketId || ('#' + j.complaintId) === docketId || j.complaintId === docketId || docketId.includes(j.complaintId)) {
+            return { ...j, status: 'PAID & CLOSED' };
+          }
+          return j;
+        }));
+
+        // C. Pay Contractor Rajesh Shinde (Payout Total and completed jobs increment)
+        setContractorsList(prev => prev.map(c => {
+          if (c.id === 'APEX-01' || c.lead.includes('Rajesh')) {
+            const currentNum = parseInt(c.payoutTotal.replace(/[^0-9]/g, ''), 10) || 1480000;
+            return {
+              ...c,
+              completed: c.completed + 1,
+              payoutTotal: '₹' + (currentNum + 12000).toLocaleString('en-IN')
+            };
+          }
+          return c;
+        }));
+
+        // D. Mark Citizen Ticket Closed & Escrow Disbursed
+        const closeInc = (inc) => {
+          if (inc.id === docketId || ('#' + inc.id) === docketId || docketId.includes(inc.id)) {
+            const updatedTimeline = (inc.timeline || []).map(item => {
+              if (item.title.includes('Contractor Repaired')) return { ...item, completed: true };
+              if (item.title.includes('AI Telemetry Verified')) return { ...item, completed: true };
+              if (item.title.includes('Community Confirmation') || item.title.includes('Ticket Closed')) {
+                return { ...item, completed: true, date: 'Closed • Escrow Disbursed' };
+              }
+              return item;
+            });
+            return {
+              ...inc,
+              status: 'Case Resolved & Escrow Disbursed',
+              statusType: 'completed',
+              timeline: updatedTimeline
+            };
+          }
+          return inc;
+        };
+        setUserReports(prev => prev.map(closeInc));
+        setFeedItems(prev => prev.map(closeInc));
+        setSelectedIncident(prev => prev ? closeInc(prev) : prev);
+
+        // E. Audit Block
+        const newBlock = {
+          block: 1430 + auditBlocks.length,
+          hash: 'e7' + Math.random().toString(16).substring(2, 10) + '...a01',
+          event: 'OFFICER_SIGN_OFF',
+          actor: 'Elena Rostova (Municipal Engineer ID-84)',
+          docket: docketId.startsWith('#') ? docketId : '#' + docketId,
+          time: 'Just now',
+          status: 'VALIDATED',
+          zkp: 'Escrow Released to Apex Paving (₹12,000)'
+        };
+        setAuditBlocks(prev => [newBlock, ...prev]);
+
+        triggerAlert(`⚡ LIVE SYNC: Officer signed off ${docketId}! ₹12,000 released to Rajesh Shinde & Citizen ticket closed.`);
+      };
+
+      // ── 4. Municipal Officer Rework / Reject ──
+      const handleMunicipalReject = (docketId) => {
+        setDocketsList(prev => prev.map(d => (d.id === docketId || d.rawId === docketId) ? { ...d, status: 'Rework Required', matchColor: 'red' } : d));
+
+        setContractorJobs(prev => prev.map(j => {
+          if (j.id === docketId || ('#' + j.complaintId) === docketId || j.complaintId === docketId || docketId.includes(j.complaintId)) {
+            return { ...j, status: 'REWORK REQUIRED', priority: 'CRITICAL' };
+          }
+          return j;
+        }));
+
+        triggerAlert(`⚡ LIVE SYNC: Rework order dispatched for ${docketId}! Contractor Rajesh Shinde terminal notified.`);
       };
 
       if (!currentUser || activeScreen === 'login') {
         return (
-          <MobileAppShell activeRole="citizen" onSwitchRole={switchRoleQuickly}>
+          <MobileAppShell activeRole="citizen" onSwitchRole={switchRoleQuickly} liveAlert={liveAlert}>
             <div className="flex-1 w-full overflow-y-auto no-scrollbar flex flex-col justify-center">
               <LoginPage
                 onLogin={handleLogin}
@@ -6511,6 +6867,15 @@
               setLang={setLang}
               t={t}
               onSwitchRole={switchRoleQuickly}
+              docketsList={docketsList}
+              setDocketsList={setDocketsList}
+              onApproveDocket={handleMunicipalApprove}
+              onRejectDocket={handleMunicipalReject}
+              auditBlocks={auditBlocks}
+              setAuditBlocks={setAuditBlocks}
+              contractorsList={contractorsList}
+              setContractorsList={setContractorsList}
+              liveAlert={liveAlert}
             />
           </div>
         );
@@ -6521,6 +6886,7 @@
         <MobileAppShell
           activeRole={currentUser.role}
           onSwitchRole={switchRoleQuickly}
+          liveAlert={liveAlert}
         >
           {/* CITIZEN APP */}
           {!isContractor && (
@@ -6536,12 +6902,55 @@
                 t={t}
               />
               <main className="flex-1 w-full overflow-y-auto no-scrollbar px-4 pt-2 pb-20 flex flex-col">
-                {activeScreen === 'home' && <CivicHome setActiveScreen={setActiveScreen} setSelectedIncident={setSelectedIncident} selectedWard={selectedWard} t={t} />}
-                {activeScreen === 'report' && <ReportCamera setActiveScreen={setActiveScreen} addNewReport={addNewReport} selectedWard={selectedWard} t={t} />}
-                {activeScreen === 'detail' && <ComplaintDetail incident={selectedIncident} setActiveScreen={setActiveScreen} t={t} />}
-                {activeScreen === 'my-reports' && <MyReports userReports={userReports} setActiveScreen={setActiveScreen} setSelectedIncident={setSelectedIncident} t={t} />}
-                {activeScreen === 'activity' && <CivicActivity setActiveScreen={setActiveScreen} setSelectedIncident={setSelectedIncident} selectedWard={selectedWard} t={t} />}
-                {activeScreen === 'community-map' && <CommunityMap setActiveScreen={setActiveScreen} setSelectedIncident={setSelectedIncident} selectedWard={selectedWard} t={t} />}
+                {activeScreen === 'home' && (
+                  <CivicHome
+                    setActiveScreen={setActiveScreen}
+                    setSelectedIncident={setSelectedIncident}
+                    selectedWard={selectedWard}
+                    t={t}
+                    userReports={userReports}
+                    feedItems={feedItems}
+                  />
+                )}
+                {activeScreen === 'report' && (
+                  <ReportCamera
+                    setActiveScreen={setActiveScreen}
+                    addNewReport={addNewReport}
+                    selectedWard={selectedWard}
+                    t={t}
+                  />
+                )}
+                {activeScreen === 'detail' && (
+                  <ComplaintDetail
+                    incident={selectedIncident}
+                    setActiveScreen={setActiveScreen}
+                    t={t}
+                  />
+                )}
+                {activeScreen === 'my-reports' && (
+                  <MyReports
+                    userReports={userReports}
+                    setActiveScreen={setActiveScreen}
+                    setSelectedIncident={setSelectedIncident}
+                    t={t}
+                  />
+                )}
+                {activeScreen === 'activity' && (
+                  <CivicActivity
+                    setActiveScreen={setActiveScreen}
+                    setSelectedIncident={setSelectedIncident}
+                    selectedWard={selectedWard}
+                    t={t}
+                  />
+                )}
+                {activeScreen === 'community-map' && (
+                  <CommunityMap
+                    setActiveScreen={setActiveScreen}
+                    setSelectedIncident={setSelectedIncident}
+                    selectedWard={selectedWard}
+                    t={t}
+                  />
+                )}
               </main>
               {activeScreen !== 'report' && <BottomNav activeScreen={activeScreen} setActiveScreen={setActiveScreen} t={t} />}
             </>
@@ -6553,6 +6962,7 @@
               <main className="flex-1 w-full overflow-y-auto no-scrollbar px-3 pt-2 pb-20 flex flex-col">
                 {activeScreen === 'contractor-jobs' && (
                   <ContractorJobFeed
+                    jobs={contractorJobs}
                     onSelectJob={setSelectedJob}
                     setActiveScreen={setActiveScreen}
                     onLogout={handleLogout}
@@ -6564,6 +6974,7 @@
                 {activeScreen === 'contractor-camera' && (
                   <GhostOverlayCamera
                     job={selectedJob}
+                    onSubmitProof={handleContractorSubmitProof}
                     setActiveScreen={setActiveScreen}
                     t={t}
                   />
