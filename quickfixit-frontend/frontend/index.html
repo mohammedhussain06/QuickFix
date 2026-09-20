@@ -2754,7 +2754,36 @@
           setCustomPhotoFile(file);
           const reader = new FileReader();
           reader.onload = async (ev) => {
-            const dataUrl = ev.target.result;
+            const rawDataUrl = ev.target.result;
+
+            // Compress uploaded image to max 960px to guarantee fast CV analysis & safe localStorage persistence (<100KB)
+            const compressImage = (url) => new Promise((resolve) => {
+              const img = new Image();
+              img.onload = () => {
+                const maxDim = 960;
+                let w = img.width;
+                let h = img.height;
+                if (w > maxDim || h > maxDim) {
+                  if (w > h) {
+                    h = Math.round((h * maxDim) / w);
+                    w = maxDim;
+                  } else {
+                    w = Math.round((w * maxDim) / h);
+                    h = maxDim;
+                  }
+                }
+                const c = document.createElement('canvas');
+                c.width = w;
+                c.height = h;
+                const ctx = c.getContext('2d');
+                ctx.drawImage(img, 0, 0, w, h);
+                resolve(c.toDataURL('image/jpeg', 0.82));
+              };
+              img.onerror = () => resolve(url);
+              img.src = url;
+            });
+
+            const dataUrl = await compressImage(rawDataUrl);
             setCustomPhotoPreview(dataUrl);
 
             // 1. Check filename hints first
@@ -4066,6 +4095,7 @@
       const docketsList = propDocketsList || localDocketsList;
       const setDocketsList = propSetDocketsList || setLocalDocketsList;
       const [selectedDocket, setSelectedDocket] = useState(docketsList[0] || TRIAGE_QUEUE_DATA[0]);
+      const activeDocket = selectedDocket || (docketsList && docketsList[0]) || TRIAGE_QUEUE_DATA[0];
 
       useEffect(() => {
         if (docketsList && docketsList.length > 0) {
@@ -4254,17 +4284,23 @@
       // Draw connecting keypoint lines between photos
       useEffect(() => {
         const canvas = canvasRef.current;
-        if (!canvas || !selectedDocket) return;
+        if (!canvas) return;
+        const curDocket = activeDocket;
+        if (!curDocket) return;
         const ctx = canvas.getContext('2d');
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-        if (!selectedDocket.anchors || selectedDocket.anchors.length === 0) return;
+        const anchors = (curDocket.anchors && curDocket.anchors.length > 0) ? curDocket.anchors : [
+          { x1: 28, y1: 38, x2: 30, y2: 36, label: "Kerb Edge" },
+          { x1: 66, y1: 26, x2: 64, y2: 24, label: "Sign Pole" },
+          { x1: 82, y1: 52, x2: 78, y2: 48, label: "Joint Seam" }
+        ];
 
         const w = canvas.width;
         const h = canvas.height;
         const midX = w / 2;
 
-        selectedDocket.anchors.forEach((pt) => {
+        anchors.forEach((pt) => {
           const x1 = (pt.x1 / 100) * midX;
           const y1 = (pt.y1 / 100) * h;
           const x2 = midX + (pt.x2 / 100) * midX;
@@ -4295,46 +4331,46 @@
           ctx.strokeStyle = '#ffffff';
           ctx.stroke();
         });
-      }, [selectedDocket]);
+      }, [activeDocket]);
 
       const handleApprove = () => {
-        if (!selectedDocket) return;
+        if (!activeDocket) return;
         if (onApproveDocket) {
-          onApproveDocket(selectedDocket.id);
+          onApproveDocket(activeDocket.id);
         }
-        setDocketsList(prev => prev.map(d => (d.id === selectedDocket.id || d.rawId === selectedDocket.rawId) ? { ...d, status: 'Approved', matchColor: 'emerald' } : d));
-        setSelectedDocket(prev => ({ ...prev, status: 'Approved', matchColor: 'emerald' }));
+        setDocketsList(prev => prev.map(d => (d.id === activeDocket.id || d.rawId === activeDocket.rawId) ? { ...d, status: 'Approved', matchColor: 'emerald' } : d));
+        setSelectedDocket(prev => ({ ...(prev || activeDocket), status: 'Approved', matchColor: 'emerald' }));
         setActionNotice({
           type: 'approved',
-          msg: `Docket ${selectedDocket.id} Approved! Payout of ₹12,000 authorized for ${selectedDocket.contractor}. Merkle Block cryptographically sealed.`
+          msg: `Docket ${activeDocket.id} Approved! Payout of ₹12,000 authorized for ${activeDocket.contractor || 'Contractor'}. Merkle Block cryptographically sealed.`
         });
         setTimeout(() => setActionNotice(null), 6000);
       };
 
       const handleRework = () => {
-        if (!selectedDocket) return;
+        if (!activeDocket) return;
         if (onRejectDocket) {
-          onRejectDocket(selectedDocket.id);
+          onRejectDocket(activeDocket.id);
         }
-        setDocketsList(prev => prev.map(d => (d.id === selectedDocket.id || d.rawId === selectedDocket.rawId) ? { ...d, status: 'Rework Required', matchColor: 'red' } : d));
-        setSelectedDocket(prev => ({ ...prev, status: 'Rework Required' }));
+        setDocketsList(prev => prev.map(d => (d.id === activeDocket.id || d.rawId === activeDocket.rawId) ? { ...d, status: 'Rework Required', matchColor: 'red' } : d));
+        setSelectedDocket(prev => ({ ...(prev || activeDocket), status: 'Rework Required' }));
         setActionNotice({
           type: 'rework',
-          msg: `Rework order dispatched for ${selectedDocket.id}. 12-hour SLA timer initialized on contractor mobile terminal.`
+          msg: `Rework order dispatched for ${activeDocket.id}. 12-hour SLA timer initialized on contractor mobile terminal.`
         });
         setTimeout(() => setActionNotice(null), 6000);
       };
 
       const handleRejectClaim = () => {
-        if (!selectedDocket) return;
+        if (!activeDocket) return;
         if (onRejectDocket) {
-          onRejectDocket(selectedDocket.id);
+          onRejectDocket(activeDocket.id);
         }
-        setDocketsList(prev => prev.map(d => (d.id === selectedDocket.id || d.rawId === selectedDocket.rawId) ? { ...d, status: 'Rejected & Fined', matchColor: 'red' } : d));
-        setSelectedDocket(prev => ({ ...prev, status: 'Rejected & Fined', matchColor: 'red' }));
+        setDocketsList(prev => prev.map(d => (d.id === activeDocket.id || d.rawId === activeDocket.rawId) ? { ...d, status: 'Rejected & Fined', matchColor: 'red' } : d));
+        setSelectedDocket(prev => ({ ...(prev || activeDocket), status: 'Rejected & Fined', matchColor: 'red' }));
         setActionNotice({
           type: 'rework',
-          msg: `Claim ${selectedDocket.id} Rejected. Contractor penalized ₹15,000 under Section 12-B.`
+          msg: `Claim ${activeDocket.id} Rejected. Contractor penalized ₹15,000 under Section 12-B.`
         });
         setTimeout(() => setActionNotice(null), 6000);
       };
@@ -4391,11 +4427,12 @@
 
       // Review Queue Filter Logic
       const filteredDockets = docketsList.filter(docket => {
+        if (!docket) return false;
         if (queueFilter === 'ai-verified') {
           return docket.matchColor === 'emerald' && docket.status !== 'Approved';
         }
         if (queueFilter === 'disputed') {
-          return docket.matchColor === 'red' || docket.status === 'Flagged Discrepancy' || docket.status === 'Rejected & Fined';
+          return docket.matchColor === 'red' || docket.status === 'Flagged Discrepancy' || docket.status === 'Rejected & Fined' || docket.status === 'Rework Required';
         }
         if (queueFilter === 'approved') {
           return docket.status === 'Approved';
@@ -4404,10 +4441,10 @@
       }).filter(docket => {
         if (!searchFilter.trim()) return true;
         const q = searchFilter.toLowerCase();
-        return docket.id.toLowerCase().includes(q) ||
-               docket.address.toLowerCase().includes(q) ||
-               docket.contractor.toLowerCase().includes(q) ||
-               docket.hazardType.toLowerCase().includes(q);
+        return (docket.id || '').toLowerCase().includes(q) ||
+               (docket.address || '').toLowerCase().includes(q) ||
+               (docket.contractor || '').toLowerCase().includes(q) ||
+               (docket.hazardType || docket.defect || '').toLowerCase().includes(q);
       });
 
       return (
@@ -4817,7 +4854,7 @@
                         </div>
                       ) : (
                         filteredDockets.map((item) => {
-                          const isSelected = selectedDocket && selectedDocket.id === item.id;
+                          const isSelected = activeDocket && (activeDocket.id === item.id || activeDocket.rawId === item.rawId);
                           const isMismatch = item.matchColor === 'red';
                           return (
                             <div
@@ -4847,12 +4884,12 @@
                                 </div>
                                 <span
                                   className={`px-2 py-0.5 rounded-full text-[10px] font-['Plus_Jakarta_Sans'] font-bold ${
-                                    item.sla.includes('left')
+                                    (item.sla || '').includes('left')
                                       ? 'bg-[#ffdad6] text-[#ba1a1a]'
                                       : 'bg-[#f0f6f1] text-[#6f7e73]'
                                   }`}
                                 >
-                                  {item.sla}
+                                  {item.sla || '24h SLA'}
                                 </span>
                               </div>
 
@@ -4865,7 +4902,7 @@
                                   <span className="material-symbols-outlined text-[14px] text-[#ba1a1a]">
                                     dangerous
                                   </span>
-                                  <span className="truncate">{item.hazardType}</span>
+                                  <span className="truncate">{item.hazardType || item.defect || 'Road Surface Hazard'}</span>
                                 </div>
                                 <span className="truncate max-w-[140px] text-right font-medium text-[#414d45]">
                                   {item.contractor}
@@ -4874,7 +4911,7 @@
 
                               <div className="mt-3 flex items-center justify-between pt-2 border-t border-[#f0f4f0] text-[11px]">
                                 <span className="text-[#6f7e73]">
-                                  Depth: <strong className="text-[#151d19]">{item.depth}</strong>
+                                  Depth: <strong className="text-[#151d19]">{item.depth || '60mm Defect Depth'}</strong>
                                 </span>
                                 <span className={`font-bold ${
                                   item.status === 'Approved' ? 'text-[#1b5e20]' : item.status === 'Rejected & Fined' ? 'text-[#ba1a1a]' : 'text-[#6f7e73]'
@@ -4915,23 +4952,23 @@
                               Active Docket
                             </span>
                             <h2 className="font-['Plus_Jakarta_Sans'] font-extrabold text-[20px] text-[#151d19]">
-                              Inspection Evidence {selectedDocket.id}
+                              Inspection Evidence {activeDocket?.id || '#CF-8429'}
                             </h2>
                           </div>
                           <div className="flex items-center gap-1.5 text-[12px] text-[#6f7e73] mt-1">
                             <span className="material-symbols-outlined text-[15px] text-[#1b5e20]">location_on</span>
-                            <span>{selectedDocket.address}</span>
+                            <span>{activeDocket?.address || 'Location Identified'}</span>
                           </div>
                         </div>
 
                         <div className="flex items-center gap-2">
                           <span className="px-3 py-1 rounded-full bg-[#f0f6f1] text-[#414d45] text-[11px] font-['Plus_Jakarta_Sans'] font-bold flex items-center gap-1">
                             <span className="material-symbols-outlined text-[14px]">person</span>
-                            <span>Citizen: {selectedDocket.citizen}</span>
-                          </span>
+                            <span>Citizen: {activeDocket?.citizen || 'Elena Vasquez (Verified)'}</span>
+                          </div>
                           <span className="px-3 py-1 rounded-full bg-[#eef7ee] text-[#1b5e20] text-[11px] font-['Plus_Jakarta_Sans'] font-bold flex items-center gap-1">
                             <span className="material-symbols-outlined text-[14px]">local_shipping</span>
-                            <span>{selectedDocket.contractor}</span>
+                            <span>{activeDocket?.contractor || 'Apex Paving Ltd. (Rajesh Shinde)'}</span>
                           </span>
                         </div>
                       </div>
@@ -4945,7 +4982,7 @@
                         </div>
                         <span className="px-2.5 py-0.5 rounded-full bg-[#d7e8c3] text-[#1b5e20] text-[11px] font-['Plus_Jakarta_Sans'] font-bold flex items-center gap-1">
                           <span className="material-symbols-outlined text-[18px]">verified</span>
-                          <span>{selectedDocket.homographyConfidence} Homography Confidence</span>
+                          <span>{activeDocket?.homographyConfidence || activeDocket?.matchScore || '98.4% Match'} Homography Confidence</span>
                         </span>
                       </div>
 
@@ -4953,7 +4990,7 @@
                         <div className="grid grid-cols-2 w-full h-64 sm:h-72">
                           <div className="relative w-full h-full border-r border-white/20 overflow-hidden">
                             <img
-                              src={selectedDocket.beforeImage}
+                              src={activeDocket?.beforeImage || ''}
                               alt="Before Fix"
                               className="w-full h-full object-cover"
                             />
@@ -4965,14 +5002,14 @@
                                 Citizen Initial Report
                               </span>
                               <span className="text-[10px] text-white/80">
-                                {selectedDocket.reportedTime} • {selectedDocket.depth}
+                                {(activeDocket?.reportedTime || 'Just now')} • {(activeDocket?.depth || '65mm Defect Depth')}
                               </span>
                             </div>
                           </div>
 
                           <div className="relative w-full h-full overflow-hidden">
                             <img
-                              src={selectedDocket.afterImage}
+                              src={activeDocket?.afterImage || activeDocket?.beforeImage || ''}
                               alt="After Repair"
                               className="w-full h-full object-cover"
                             />
@@ -4984,7 +5021,7 @@
                                 Contractor Repair Proof
                               </span>
                               <span className="text-[10px] text-white/80">
-                                {selectedDocket.repairedTime} • {selectedDocket.repairType}
+                                {(activeDocket?.repairedTime || 'Pending Dispatch')} • {(activeDocket?.repairType || 'Hot-mix Asphalt Patch')}
                               </span>
                             </div>
                           </div>
@@ -4992,7 +5029,7 @@
 
                         <div className="absolute top-3 left-1/2 -translate-x-1/2 z-20 px-3 py-1 rounded-full bg-[#1b5e20]/90 backdrop-blur-md text-white text-[10px] font-['Plus_Jakarta_Sans'] font-bold flex items-center gap-1.5 shadow-md">
                           <span className="w-1.5 h-1.5 rounded-full bg-[#a3f69c] animate-ping"></span>
-                          <span>{selectedDocket.anchorsLocked}</span>
+                          <span>{activeDocket?.anchorsLocked || '3/3 Anchors Locked'}</span>
                         </div>
 
                         <canvas
@@ -5004,7 +5041,12 @@
                       </div>
 
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                        {selectedDocket.telemetry.map((tel, idx) => (
+                        {(activeDocket?.telemetry || [
+                          { name: "GPS Delta", detail: "1.1m offset (Tolerance ≤ 2.5m)", icon: "near_me", status: "Pass" },
+                          { name: "Compass Heading", detail: "284° WNW (Locked)", icon: "explore", status: "Pass" },
+                          { name: "Landmark Geometry", detail: "Curb line & edge locked (98%)", icon: "domain", status: "Pass" },
+                          { name: "Surface Telemetry", detail: "Defect signature confirmed", icon: "layers", status: "Pass" }
+                        ]).map((tel, idx) => (
                           <div
                             key={idx}
                             className="p-3 rounded-xl bg-[#f8fbf8] border border-[#e0ece2] flex items-center justify-between"
@@ -5050,7 +5092,7 @@
                               </span>
                             </div>
                             <span className="font-mono text-[11px] text-[#6f7e73] truncate">
-                              SHA-256: {selectedDocket.hash}
+                              SHA-256: {activeDocket?.hash || activeDocket?.auditHash || '#e7a4f9104c89a01f92e42b109f01'}
                             </span>
                           </div>
                         </div>
@@ -6845,19 +6887,35 @@
       const [selectedIncident, setSelectedIncident] = useState(MOCK_INCIDENT_DETAIL);
       const [selectedJob, setSelectedJob] = useState(MOCK_CONTRACTOR_JOBS[0]);
 
-      // ── Live Unified Cross-Panel Collections ──
-      const [userReports, setUserReports] = useState([]);
-      const [contractorJobs, setContractorJobs] = useState(MOCK_CONTRACTOR_JOBS);
-      const [docketsList, setDocketsList] = useState(TRIAGE_QUEUE_DATA);
-      const [feedItems, setFeedItems] = useState(MOCK_FEED_ITEMS);
-      const [auditBlocks, setAuditBlocks] = useState([
+      // ── Live Unified Cross-Panel Collections with LocalStorage Persistence ──
+      const loadStorage = (key, fallback) => {
+        try {
+          const raw = localStorage.getItem(key);
+          if (!raw) return fallback;
+          const parsed = JSON.parse(raw);
+          return Array.isArray(fallback) && !Array.isArray(parsed) ? fallback : parsed;
+        } catch (e) {
+          return fallback;
+        }
+      };
+
+      const saveStorage = (key, val) => {
+        try {
+          localStorage.setItem(key, JSON.stringify(val));
+        } catch (e) {
+          console.warn('Storage save notice:', e);
+        }
+      };
+
+      const initialAuditBlocks = [
         { block: 1429, hash: "e7a4f9104c89a01f92e42b109f01", event: "OFFICER_SIGN_OFF", actor: "Elena Rostova (ID-84)", docket: "#CF-8429", time: "2 mins ago", status: "VALIDATED", zkp: "Groth16 Valid" },
         { block: 1428, hash: "3d18e9842fbc401eb40182903b91", event: "AI_HOMOGRAPHY_MATCH", actor: "CV Engine v2.4", docket: "#CF-8429", time: "14 mins ago", status: "VALIDATED", zkp: "Keypoints 3/3 Locked" },
         { block: 1427, hash: "11e9a21bcf87c55e7c55891a201c", event: "CONTRACTOR_PROOF_SUBMIT", actor: "Apex Paving (Rajesh Shinde)", docket: "#CF-8429", time: "22 mins ago", status: "VALIDATED", zkp: "GPS & Compass Locked" },
         { block: 1426, hash: "9a21bcf87c55e3188f7b31049921", event: "CITIZEN_REPORT_SUBMIT", actor: "Maya S. (Citizen)", docket: "#CF-8429", time: "2 days ago", status: "VALIDATED", zkp: "Mobile Attestation" },
         { block: 1425, hash: "84a1e9b201f893ca192be771894a", event: "OFFICER_SIGN_OFF", actor: "Elena Rostova (ID-84)", docket: "#CF-8428", time: "3 days ago", status: "VALIDATED", zkp: "Groth16 Valid" }
-      ]);
-      const [contractorsList, setContractorsList] = useState([
+      ];
+
+      const initialContractorsList = [
         {
           id: "APEX-01",
           name: "Apex Paving Ltd.",
@@ -6877,7 +6935,21 @@
           ward: "Ward 14 • Maplewood",
           phone: "+91 98334 10294"
         }
-      ]);
+      ];
+
+      const [userReports, setUserReports] = useState(() => loadStorage('civicfix_user_reports', []));
+      const [contractorJobs, setContractorJobs] = useState(() => loadStorage('civicfix_contractor_jobs', MOCK_CONTRACTOR_JOBS));
+      const [docketsList, setDocketsList] = useState(() => loadStorage('civicfix_dockets', TRIAGE_QUEUE_DATA));
+      const [feedItems, setFeedItems] = useState(() => loadStorage('civicfix_feed_items', MOCK_FEED_ITEMS));
+      const [auditBlocks, setAuditBlocks] = useState(() => loadStorage('civicfix_audit_blocks', initialAuditBlocks));
+      const [contractorsList, setContractorsList] = useState(() => loadStorage('civicfix_contractors', initialContractorsList));
+
+      useEffect(() => { saveStorage('civicfix_user_reports', userReports); }, [userReports]);
+      useEffect(() => { saveStorage('civicfix_contractor_jobs', contractorJobs); }, [contractorJobs]);
+      useEffect(() => { saveStorage('civicfix_dockets', docketsList); }, [docketsList]);
+      useEffect(() => { saveStorage('civicfix_feed_items', feedItems); }, [feedItems]);
+      useEffect(() => { saveStorage('civicfix_audit_blocks', auditBlocks); }, [auditBlocks]);
+      useEffect(() => { saveStorage('civicfix_contractors', contractorsList); }, [contractorsList]);
       const [liveAlert, setLiveAlert] = useState(null);
 
       const t = TRANSLATIONS[lang] || TRANSLATIONS.en;
@@ -6921,11 +6993,16 @@
         setUserReports(p => [newIncident, ...p]);
         setSelectedIncident(newIncident);
 
+        const hazardLabel = newIncident.title || (newIncident.defectType + ' Defect') || 'Road Surface Hazard';
+        const depthVal = (newIncident.metrics && newIncident.metrics.find(m => m.label && m.label.includes('Depth'))?.value) || '65mm Defect Depth';
+        const confNum = typeof newIncident.confidence === 'number' ? newIncident.confidence : 97.8;
+        const confStr = confNum.toFixed(1) + '%';
+
         // A. Automatically generate a Work Order in Contractor Job Feed
         const newJob = {
           id: 'WO-' + newIncident.id.replace('CF-', ''),
           complaintId: newIncident.id,
-          title: newIncident.title || 'Road Surface Hazard',
+          title: hazardLabel,
           address: newIncident.address,
           priority: 'CRITICAL',
           slaHours: 6,
@@ -6936,39 +7013,47 @@
           roadClass: 'Arterial Road',
           distance: '0.3 km away',
           coordinates: '19.0760° N, 72.8777° E',
-          defectType: newIncident.title ? newIncident.title.split(' ')[0] : 'Pothole',
+          defectType: newIncident.defectType || 'Pothole',
           reporterName: newIncident.reporter
         };
         setContractorJobs(prev => [newJob, ...prev]);
 
-        // B. Automatically route complaint into Municipal Review Docket
+        // B. Automatically route complaint into Municipal Review Docket with 100% full schema
         const newDocket = {
           id: '#' + newIncident.id,
           rawId: newIncident.id,
-          matchScore: (newIncident.confidence ? newIncident.confidence.toFixed(1) + '%' : '98.4%') + ' Baseline',
+          matchScore: confStr + ' Baseline',
           matchColor: 'emerald',
-          defect: newIncident.title || (newIncident.defectType + ' Defect'),
-          address: newIncident.address,
-          ward: selectedWard,
+          sla: '24h SLA',
+          hazardType: hazardLabel,
+          defect: hazardLabel,
+          address: newIncident.address || 'Near 108 Main St, Ward 14',
+          ward: selectedWard || 'Ward 14 (Maplewood)',
           contractor: 'Apex Paving Ltd. (Rajesh Shinde)',
-          timeReported: 'Just now',
-          timeRepaired: 'Pending Dispatch',
-          status: 'Pending Verification',
+          crew: 'Crew #4 (Rajesh S.)',
+          citizen: newIncident.reporter || 'Elena Vasquez (Citizen ID-42)',
+          status: 'Sign-off Ready',
+          depth: depthVal,
+          reportedTime: 'Just now',
+          repairedTime: 'Pending Dispatch',
+          repairType: 'Hot-mix Asphalt Patch',
+          homographyConfidence: confStr,
+          anchorsLocked: '3/3 Anchors Locked',
           beforeImage: newIncident.beforeImage,
           afterImage: newIncident.afterImage || newIncident.beforeImage,
-          confidence: newIncident.confidence || 97.8,
-          anchors: [
-            { x1: 30, y1: 42, x2: 32, y2: 43 },
-            { x1: 70, y1: 38, x2: 72, y2: 39 },
-            { x1: 50, y1: 65, x2: 52, y2: 66 }
+          confidence: confNum,
+          telemetry: [
+            { name: "GPS Delta", detail: "1.1m offset (Tolerance ≤ 2.5m)", icon: "near_me", status: "Pass" },
+            { name: "Compass Heading", detail: "284° WNW (Locked)", icon: "explore", status: "Pass" },
+            { name: "Landmark Geometry", detail: "Curb line & edge locked (98%)", icon: "domain", status: "Pass" },
+            { name: "Surface Telemetry", detail: "Defect signature confirmed", icon: "layers", status: "Pass" }
           ],
-          metrics: {
-            siftScore: '97.8%',
-            homographyDelta: 'Δ 2.4°',
-            orbInvariance: '98%',
-            gpsRadius: '1.2m'
-          },
-          auditHash: '9a21bcf' + Math.random().toString(16).substring(2, 8) + '...'
+          hash: newIncident.ledgerHash || ('#e7a4f' + Math.random().toString(16).substring(2, 10) + '...9f01'),
+          anchors: [
+            { x1: 28, y1: 38, x2: 30, y2: 36, label: "Kerb Edge" },
+            { x1: 66, y1: 26, x2: 64, y2: 24, label: "Sign Pole" },
+            { x1: 82, y1: 52, x2: 78, y2: 48, label: "Joint Seam" }
+          ]
         };
         setDocketsList(prev => [newDocket, ...prev]);
 
@@ -7318,7 +7403,49 @@
       );
     }
 
-    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+        class ErrorBoundary extends React.Component {
+      constructor(props) {
+        super(props);
+        this.state = { hasError: false, error: null };
+      }
+      static getDerivedStateFromError(error) {
+        return { hasError: true, error };
+      }
+      componentDidCatch(error, errorInfo) {
+        console.error("CivicFix Runtime Error caught:", error, errorInfo);
+      }
+      render() {
+        if (this.state.hasError) {
+          return (
+            <div className="min-h-screen w-full bg-[#f4f7f4] flex flex-col items-center justify-center p-6 text-[#151d19]">
+              <div className="max-w-md w-full p-6 rounded-3xl bg-white border border-[#d7e8c3] shadow-lg flex flex-col items-center text-center gap-4">
+                <div className="w-12 h-12 rounded-full bg-[#ffdad6] text-[#ba1a1a] flex items-center justify-center">
+                  <span className="material-symbols-outlined text-[28px]">warning</span>
+                </div>
+                <h3 className="font-['Plus_Jakarta_Sans'] font-extrabold text-[18px]">Temporary Interface Refresh Required</h3>
+                <p className="text-[13px] text-[#546346]">A component encountered an issue rendering data. Click below to recover the dashboard with clean state.</p>
+                <button
+                  onClick={() => {
+                    localStorage.removeItem('civicfix_dockets');
+                    window.location.reload();
+                  }}
+                  className="w-full py-3 rounded-full bg-[#0d631b] hover:bg-[#2e7d32] text-white font-['Plus_Jakarta_Sans'] font-bold text-[14px] transition-all cursor-pointer"
+                >
+                  Reload Dashboard
+                </button>
+              </div>
+            </div>
+          );
+        }
+        return this.props.children;
+      }
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(
+      <ErrorBoundary>
+        <App />
+      </ErrorBoundary>
+    );
   </script>
 </body>
 </html>
