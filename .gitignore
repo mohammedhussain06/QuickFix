@@ -1,0 +1,47 @@
+# =====================
+# FRONTEND
+# =====================
+quickfixit-frontend/frontend/node_modules/
+quickfixit-frontend/frontend/dist/
+quickfixit-frontend/frontend/.vite/
+
+# =====================
+# BACKEND
+# =====================
+quickfixit-backend/__pycache__/
+quickfixit-backend/**/__pycache__/
+quickfixit-backend/**/*.pyc
+
+# Secrets
+quickfixit-backend/.env
+quickfixit-backend/.env.local
+
+# Database
+quickfixit-backend/*.db
+quickfixit-backend/*.sqlite
+quickfixit-backend/*.sqlite3
+
+# Large datasets (keep training scripts, not images)
+quickfixit-backend/datasets/pothole_segmentation/
+quickfixit-backend/datasets/demo_pairs/
+quickfixit-backend/datasets/merged_dataset/
+quickfixit-backend/*.zip
+quickfixit-backend/*.tar.gz
+
+# Model weights - only keep fine-tuned best.pt
+quickfixit-backend/yolov8n.pt
+quickfixit-backend/models/pothole_yolov8/weights/last.pt
+quickfixit-backend/models/pothole_yolov8/events.out.tfevents.*
+
+# Uploads
+quickfixit-backend/uploaded_photos/
+
+# =====================
+# GENERAL
+# =====================
+powershell.cmd
+.DS_Store
+.vscode/
+.idea/
+*.swp
+*~
