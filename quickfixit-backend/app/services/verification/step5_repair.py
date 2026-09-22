@@ -39,8 +39,8 @@ from PIL import Image
 from app.core.config import settings
 
 # YOLO class names we care about (adjust based on your trained model's class list)
-DAMAGE_CLASSES = {"pothole", "road_damage", "crack", "damaged_road"}
-REPAIRED_CLASSES = {"road_patch", "intact_road", "repaired", "asphalt"}
+DAMAGE_CLASSES = {"pothole", "road_damage", "crack", "damaged_road", "waterlogging", "waterlogging_hazard"}
+REPAIRED_CLASSES = {"road_patch", "intact_road", "repaired", "asphalt", "drained_road"}
 
 # Patch torch.load for PyTorch 2.6 compatibility with Ultralytics checkpoints
 try:
@@ -165,40 +165,60 @@ def _detect_dominant_class(model, img: Image.Image) -> Optional[str]:
 def _run_heuristic_fallback(before_bytes: bytes, after_bytes: bytes, error: str) -> dict:
     """
     Structural void & rim discontinuity heuristic fallback when YOLOv8 is unavailable.
-    Civil Engineering reframe: A pothole is defined by the rim discontinuity / structural void
-    in the pavement, regardless of whether it is dry or water-occluded.
-    Water is treated as a secondary occlusion attribute, not a competing class.
+    Civil Engineering reframe:
+      - Pothole: Localized structural void in pavement (rim discontinuity), dry or water-filled.
+      - Waterlogging: Surface water accumulation over continuous intact pavement (no rim discontinuity).
+      - Submerged Hazard: Ambiguous bed profile beneath standing water flagged for post-drainage inspection.
     """
     before_analysis = _analyze_structural_void(before_bytes)
     after_analysis = _analyze_structural_void(after_bytes)
 
-    before_likely_damaged = before_analysis["has_structural_void"]
-    after_likely_repaired = not after_analysis["has_structural_void"]
+    before_has_damage = before_analysis["has_structural_void"] or before_analysis["is_waterlogging"]
+    after_has_pothole = after_analysis["has_structural_void"]
+    after_has_water = after_analysis["has_water"]
 
-    passed = before_likely_damaged and after_likely_repaired
-    score = 0.65 if passed else 0.25
+    if before_analysis["has_structural_void"]:
+        before_class = "pothole_structural_void"
+        passed = not after_has_pothole
+    elif before_analysis["is_submerged_hazard"]:
+        before_class = "waterlogging_submerged_hazard"
+        passed = not after_has_water and not after_has_pothole
+    elif before_analysis["is_waterlogging"]:
+        before_class = f"waterlogging_{before_analysis['subtype']}"
+        passed = not after_has_water
+    else:
+        before_class = "intact_road"
+        passed = False
 
-    water_note = " [Water-Occluded Cavity]" if before_analysis["water_occluded"] else " [Dry Cavity]"
+    score = 0.70 if passed else 0.25
 
     return {
         "passed": passed,
         "score": score,
         "reason": (
-            f"Structural void analysis ({'YOLO fallback' if error else 'verified'}). "
-            f"Before: Rim step={before_analysis['rim_step']:.2f}{water_note}. "
-            f"After: Rim step={after_analysis['rim_step']:.2f}, Repaired={after_likely_repaired}."
+            f"Civil Engineering Analysis: Detected '{before_class}' (Rim step={before_analysis['rim_step']:.2f}, "
+            f"Hydrological={before_analysis['subtype']}, SubmergedHazard={before_analysis['is_submerged_hazard']}). "
+            f"After photo: Void eliminated={not after_has_pothole}, Water drained={not after_has_water}."
         ),
-        "before_detected_class": "pothole_structural_void" if before_likely_damaged else "intact_road",
-        "after_detected_class": "road_patch" if after_likely_repaired else "pothole_structural_void",
-        "pothole_in_after": not after_likely_repaired,
+        "before_detected_class": before_class,
+        "after_detected_class": "road_patch" if passed else before_class,
+        "pothole_in_after": after_has_pothole,
         "before_water_occluded": before_analysis["water_occluded"],
+        "waterlog_subtype": before_analysis["subtype"],
+        "possible_submerged_hazard": before_analysis["is_submerged_hazard"],
     }
 
 
 def _analyze_structural_void(photo_bytes: bytes) -> dict:
     """
-    Evaluates rim discontinuity (step in elevation/luminance between surrounding road and inner cavity)
-    and detects standing water as a secondary occlusion attribute.
+    Two-Stage Civil Engineering Analysis:
+    Stage 1: Structural Void Detector
+      Checks for fractured rim discontinuity (asphalt breakdown).
+      If present -> Pothole (water treated as secondary occlusion attribute).
+    Stage 2: Hydrological Waterlogging & Submerged Hazard
+      If NO rim discontinuity -> Waterlogging (drainage deficiency over continuous intact road).
+      Sub-types: sheet_pooling, drain_overflow, low_point_ponding, roadside_spillover.
+      Edge case: Flag possible submerged hazard when bed profile is ambiguous at low points.
     """
     img = Image.open(BytesIO(photo_bytes)).convert("L")
     w, h = img.size
@@ -220,17 +240,42 @@ def _analyze_structural_void(photo_bytes: bytes) -> dict:
 
     # Specular glint count (water sheen/reflection)
     specular_fraction = (inner_crop > 0.78).mean()
-    water_occluded = (specular_fraction > 0.02) or (inner_mean > 0.60 and rim_step > 0.08)
+    has_water = (specular_fraction > 0.015) or (inner_mean > 0.58 and outer_mean > 0.50)
 
-    # A pothole is confirmed if rim step discontinuity is present or dark cavity void
-    has_structural_void = (rim_step > 0.06) or (inner_mean < 0.36)
+    # A pothole is confirmed if rim step discontinuity is present or deep cavity void
+    has_structural_void = (rim_step > 0.065) or (inner_mean < 0.36 and rim_step > 0.03)
+    water_occluded = has_structural_void and has_water
+
+    # Waterlogging is confirmed when water accumulates on structurally continuous road
+    is_waterlogging = (not has_structural_void) and has_water
+
+    # Determine hydrological sub-type:
+    subtype = "sheet_pooling"
+    if is_waterlogging:
+        if inner_mean < 0.42:
+            subtype = "low_point_ponding"
+        elif specular_fraction > 0.04:
+            subtype = "drain_overflow"
+        elif rim_step > 0.03:
+            subtype = "roadside_spillover"
+        else:
+            subtype = "sheet_pooling"
+
+    # Safety edge case: Possible Submerged Hazard
+    is_submerged_hazard = False
+    if is_waterlogging and ((0.038 <= rim_step <= 0.065) or (subtype == "low_point_ponding" and specular_fraction > 0.03)):
+        is_submerged_hazard = True
 
     return {
         "has_structural_void": has_structural_void,
         "rim_step": rim_step,
         "water_occluded": water_occluded,
+        "is_waterlogging": is_waterlogging,
+        "is_submerged_hazard": is_submerged_hazard,
+        "subtype": subtype,
         "inner_mean": inner_mean,
         "outer_mean": outer_mean,
+        "has_water": has_water,
     }
 
 

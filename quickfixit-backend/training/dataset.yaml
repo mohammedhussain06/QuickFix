@@ -1,26 +1,42 @@
 # training/dataset.yaml - YOLOv8 dataset configuration
 # Civil Engineering Defect Taxonomy & Model Reframe:
 #
-# 0: pothole      - Localized, structurally-bounded depression or void in the road surface
-#                   caused by breakdown of pavement material (asphalt/aggregate binder failure),
-#                   characterized by a discontinuity in the road surface at its rim - exposed sub-base,
-#                   cracked/crumbling edges, or visible drop in surface level relative to surrounding
-#                   intact pavement - REGARDLESS of whether the cavity is currently dry, empty, or
-#                   filled with standing water. Water is a secondary seasonal occlusion attribute.
-# 1: road_damage  - Longitudinal cracks, fatigue alligator cracking, or shoulder fissures.
-# 2: road_patch   - Bitumen/asphalt compacted patch restoring pavement continuity and sealing rim void.
-# 3: intact_road  - Structurally continuous undamaged road surface (including surface sheet waterlogging
-#                   where pavement beneath is continuous and unbroken).
+# 0: pothole        - Localized, structurally-bounded depression or void in the road surface
+#                     caused by breakdown of pavement material (asphalt/aggregate binder failure),
+#                     characterized by a discontinuity in the road surface at its rim — exposed sub-base,
+#                     cracked/crumbling edges, or visible drop in surface level relative to surrounding
+#                     intact pavement — REGARDLESS of whether the cavity is currently dry, empty, or
+#                     filled with standing water. Water is a secondary seasonal occlusion attribute.
+#
+# 1: waterlogging   - A surface-level accumulation of water on an otherwise structurally continuous road,
+#                     caused by insufficient drainage, low camber, blocked culverts/storm drains, or
+#                     rainfall exceeding runoff capacity — where the pavement beneath the water, if removed
+#                     or drained, shows NO fracture, void, or elevation discontinuity. The defect is in the
+#                     drainage system, not the pavement structure.
+#                     Inverse framing: Defined by the absence of a structural void beneath the water.
+#                     Hydrological Sub-types:
+#                       - sheet_pooling: Flat/negative camber, broad, shallow, follows lane width.
+#                       - drain_overflow: Blocked/overwhelmed storm drain, radiating flow.
+#                       - low_point_ponding: Road dips at underpass/junction, elevation low-point.
+#                       - roadside_spillover: Adjacent land runoff entering carriageway, edge silty water.
+#                     Critical Edge Case:
+#                       - waterlogging_submerged_hazard: Recurring low-point ponding with ambiguous bed profile;
+#                         flagged for post-drainage structural core inspection rather than silent classification.
+#
+# 2: road_damage    - Longitudinal cracks, fatigue alligator cracking, or shoulder fissures.
+# 3: road_patch     - Bitumen/asphalt compacted patch restoring pavement continuity and sealing rim void.
+# 4: intact_road    - Structurally continuous undamaged road surface under dry or normal conditions.
 
 path: C:/Users/Mohammed Hussain/.gemini/antigravity-ide/scratch/quickfix/quickfixit-backend/datasets/pothole_segmentation
 train: images/train
 val: images/val
 test: images/val
 
-nc: 4
+nc: 5
 
 names:
   0: pothole
-  1: road_damage
-  2: road_patch
-  3: intact_road
+  1: waterlogging
+  2: road_damage
+  3: road_patch
+  4: intact_road
