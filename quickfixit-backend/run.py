@@ -23,9 +23,9 @@ def setup_env():
     if not env_file.exists():
         if demo_env.exists():
             shutil.copy(demo_env, env_file)
-            print("✅ Copied .env.demo → .env")
+            print("[OK] Copied .env.demo -> .env")
         else:
-            print("⚠️  No .env file found. Creating minimal default...")
+            print("[!] No .env file found. Creating minimal default...")
             env_file.write_text(
                 "APP_ENV=demo\n"
                 "DEBUG=true\n"
@@ -35,15 +35,15 @@ def setup_env():
                 "LOCAL_STORAGE_PATH=./uploaded_photos\n"
             )
     else:
-        print("✅ Using existing .env")
+        print("[OK] Using existing .env")
 
 
 def check_dependencies():
     try:
         import fastapi, uvicorn, sqlalchemy, aiosqlite, cv2, imagehash, ultralytics
-        print("✅ All dependencies found")
+        print("[OK] All dependencies found")
     except ImportError as e:
-        print(f"❌ Missing dependency: {e}")
+        print(f"[X] Missing dependency: {e}")
         print("\nInstall with:")
         print("   pip install -r requirements-demo.txt")
         sys.exit(1)
@@ -51,14 +51,14 @@ def check_dependencies():
 
 def main():
     print("=" * 50)
-    print("  QuickFix It — Demo Server")
+    print("  QuickFix It - Demo Server")
     print("=" * 50)
 
     setup_env()
     check_dependencies()
 
-    print("\n🚀 Starting server at http://localhost:8000")
-    print("📖 API docs at    http://localhost:8000/docs\n")
+    print("\n[*] Starting server at http://localhost:8000")
+    print("[*] API docs at    http://localhost:8000/docs\n")
 
     subprocess.run([
         sys.executable, "-m", "uvicorn",
