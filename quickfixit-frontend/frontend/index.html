@@ -2546,7 +2546,8 @@
       const [gpsPriorComplaint, setGpsPriorComplaint] = useState(null);
       const [classScores, setClassScores] = useState({
         'Pothole': 98.4,
-        'Crack / Shoulder': 24.5,
+        'Crack': 18.2,
+        'Shoulder Distress': 12.1,
         'Manhole Collar': 7.1,
         'Waterlogging': 4.2
       });
@@ -2561,7 +2562,7 @@
       const canvasRef = useRef(null);
       const fileInputRef = useRef(null);
 
-      const categories = ['Pothole', 'Crack / Shoulder', 'Manhole Collar', 'Waterlogging'];
+      const categories = ['Pothole', 'Crack', 'Shoulder Distress', 'Manhole Collar', 'Waterlogging'];
 
       // Formal Hydrological Sub-Types of Waterlogging
       const WATERLOGGING_SUBTYPES = {
@@ -2604,13 +2605,21 @@
                 : 'Structural void boundary locked. Standing water treated as seasonal occlusion.')
             : 'Keep curb edge in frame for 2x faster verification & homography'
         },
-        'Crack / Shoulder': {
-          name: 'Crack / Shoulder',
-          sub: 'Longitudinal Pavement Fissure',
-          depth: '1.8 cm depth • 18mm width',
+        'Crack': {
+          name: 'Crack',
+          sub: 'Planar Linear / Web Fissure',
+          depth: '1.2 cm depth • 12mm width',
           severity: 'MEDIUM',
           specs: 'Polymer Crack Sealant & Joint Mastic Banding',
-          tip: 'Align along pavement shoulder line to trace crack propagation'
+          tip: 'Planar continuous pavement with split material. No elevation drop.'
+        },
+        'Shoulder Distress': {
+          name: 'Shoulder Distress',
+          sub: 'Edge Break / Drop-off',
+          depth: '4.5 cm drop-off • Edge raveling',
+          severity: 'HIGH',
+          specs: 'Shoulder Berm Re-grading & Base Edge Compaction',
+          tip: 'Elevation discontinuity at road edge boundary distinguishing from standard crack.'
         },
         'Manhole Collar': {
           name: 'Manhole Collar',
