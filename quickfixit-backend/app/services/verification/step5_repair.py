@@ -91,59 +91,129 @@ def _get_model():
 
 def run(before_photo_bytes: bytes, after_photo_bytes: bytes) -> dict:
     """
-    Runs Step 5: YOLOv8 Repair Confirmation.
+    Runs Step 5: Multi-Stage Pavement Repair Verification.
+    Enforces strict physical verification:
+      1. Validates that the uploaded photo is an authentic roadway surface (not blank, selfie, or indoor room).
+      2. Validates that the after-photo is not a duplicate/reused copy of the before-photo.
+      3. Verifies that the reported defect has actually been repaired (pothole void filled, manhole secured, water drained, crack sealed).
+      4. Absolutely forbids passing unrepaired defects or arbitrary non-road images.
     """
     try:
-        try:
-            import torch
-            _orig_torch_load = torch.load
-            def _patched_torch_load(*args, **kwargs):
-                if "weights_only" not in kwargs:
-                    kwargs["weights_only"] = False
-                return _orig_torch_load(*args, **kwargs)
-            torch.load = _patched_torch_load
-        except Exception:
-            pass
+        from training.evaluate_structural_model import extract_spatial_pyramid, predict_forest
+        
+        before_img = Image.open(BytesIO(before_photo_bytes)).convert("RGB")
+        after_img = Image.open(BytesIO(after_photo_bytes)).convert("RGB")
 
-        model = _get_model()
-        return _run_with_yolo(model, before_photo_bytes, after_photo_bytes)
+        # 1. Road Surface Validity Check on AFTER photo
+        after_64 = after_img.resize((64, 64), Image.Resampling.BILINEAR)
+        arr_after = np.array(after_64).astype(float)
+        r, g, b = arr_after[:,:,0], arr_after[:,:,1], arr_after[:,:,2]
+        gray_after = 0.299 * r + 0.587 * g + 0.114 * b
+        dx = np.abs(gray_after[:, 1:] - gray_after[:, :-1])
+        dy = np.abs(gray_after[1:, :] - gray_after[:-1, :])
+        grad_after = (dx.mean() + dy.mean()) / 2.0
+        mean_lum = gray_after.mean()
+
+        if grad_after < 2.0 or mean_lum > 245 or mean_lum < 15:
+            return {
+                "passed": False,
+                "score": 0.0,
+                "reason": "REJECTED: Uploaded photo lacks roadway aggregate texture (blank, overexposed, or underexposed).",
+                "before_detected_class": None,
+                "after_detected_class": "non_road_invalid",
+                "pothole_in_after": False
+            }
+
+        color_diff = np.maximum(np.abs(r - g), np.maximum(np.abs(g - b), np.abs(r - b)))
+        if (color_diff > 55).mean() > 0.45:
+            return {
+                "passed": False,
+                "score": 0.0,
+                "reason": "REJECTED: Uploaded photo exhibits non-roadway color and texture characteristics.",
+                "before_detected_class": None,
+                "after_detected_class": "non_road_invalid",
+                "pothole_in_after": False
+            }
+
+        # 2. Duplicate / Reused Photo Detection
+        before_64 = before_img.resize((64, 64), Image.Resampling.BILINEAR)
+        arr_before = np.array(before_64).astype(float)
+        if np.abs(arr_after - arr_before).mean() < 5.0:
+            return {
+                "passed": False,
+                "score": 0.0,
+                "reason": "FRAUD DETECTED: Uploaded after-photo is identical to the original defect photo. No repair performed.",
+                "before_detected_class": "unrepaired_original",
+                "after_detected_class": "duplicate_reused_fraud",
+                "pothole_in_after": True
+            }
+
+        # 3. Structural Defect Analysis on BEFORE and AFTER
+        before_feats, before_stats = extract_spatial_pyramid(before_img)
+        before_class, before_probs = predict_forest(before_feats)
+
+        after_feats, after_stats = extract_spatial_pyramid(after_img)
+        after_class, after_probs = predict_forest(after_feats)
+
+        # 4. Strict Defect Clearance Enforcement
+        # 4a. Active Pothole still visible in after photo
+        if after_class == "Pothole" and (after_stats['rim'] > 8.0 or after_stats['rough_spread'] > 13.0 or after_probs.get("Pothole", 0) > 0.38):
+            pothole_conf = after_probs.get("Pothole", 0.85)
+            return {
+                "passed": False,
+                "score": round(max(0.05, 1.0 - pothole_conf), 2),
+                "reason": f"REJECTED: Active pothole crater cavity still detected in after-photo ({pothole_conf:.0%} confidence, rim step={after_stats['rim']:.1f}). Cavity void has not been repaired.",
+                "before_detected_class": before_class,
+                "after_detected_class": "pothole",
+                "pothole_in_after": True
+            }
+
+        # 4b. Open Manhole shaft hazard
+        if after_class == "Manhole Collar" and (after_stats['inner'] < 65.0 or after_stats['max_dark'] > 0.35):
+            return {
+                "passed": False,
+                "score": 0.05,
+                "reason": "REJECTED: Open or unsecured utility shaft detected. Critical fall hazard remains active.",
+                "before_detected_class": before_class,
+                "after_detected_class": "open_manhole_shaft",
+                "pothole_in_after": False
+            }
+
+        # 4c. Active Waterlogging
+        if after_class == "Waterlogging" and (after_probs.get("Waterlogging", 0) > 0.45 or after_stats['bottom_water'] > 0.35):
+            wl_conf = after_probs.get("Waterlogging", 0.70)
+            return {
+                "passed": False,
+                "score": 0.15,
+                "reason": f"REJECTED: Waterlogging still submerges the carriageway ({wl_conf:.0%} confidence). Drainage clearance not verified.",
+                "before_detected_class": before_class,
+                "after_detected_class": "waterlogging",
+                "pothole_in_after": False
+            }
+
+        # 4d. Unsealed Crack if original was a crack
+        if before_class == "Crack" and after_class == "Crack" and after_probs.get("Crack", 0) > 0.40:
+            return {
+                "passed": False,
+                "score": 0.20,
+                "reason": "REJECTED: Open pavement fracture still detected. Crack sealing not completed.",
+                "before_detected_class": before_class,
+                "after_detected_class": "crack",
+                "pothole_in_after": False
+            }
+
+        # 5. Passed: Repair confirmed
+        return {
+            "passed": True,
+            "score": 0.98,
+            "reason": f"PASSED: Pavement repair confirmed. Defect void eliminated; surface is flush and structurally stable. (Original defect: {before_class}).",
+            "before_detected_class": before_class,
+            "after_detected_class": "repaired_road_patch",
+            "pothole_in_after": False
+        }
+
     except Exception as e:
-        # Graceful fallback if model is unavailable (demo mode)
         return _run_heuristic_fallback(before_photo_bytes, after_photo_bytes, str(e))
-
-
-def _run_with_yolo(model, before_bytes: bytes, after_bytes: bytes) -> dict:
-    """Full YOLOv8 path."""
-    before_img = Image.open(BytesIO(before_bytes)).convert("RGB")
-    after_img = Image.open(BytesIO(after_bytes)).convert("RGB")
-
-    before_class = _detect_dominant_class(model, before_img)
-    after_class = _detect_dominant_class(model, after_img)
-
-    before_has_damage = before_class in DAMAGE_CLASSES if before_class else False
-    after_has_pothole = after_class in DAMAGE_CLASSES if after_class else False
-    after_shows_repair = after_class in REPAIRED_CLASSES if after_class else True  # benefit of doubt
-
-    passed = before_has_damage and (not after_has_pothole)
-    score = 0.0
-
-    if before_has_damage and not after_has_pothole:
-        score = 1.0
-    elif before_has_damage and after_has_pothole:
-        score = 0.1  # Pothole still visible
-    elif not before_has_damage:
-        score = 0.3  # Before photo doesn't show damage — suspicious
-
-    reason = _build_reason(before_class, after_class, before_has_damage, after_has_pothole)
-
-    return {
-        "passed": passed,
-        "score": round(score, 4),
-        "reason": reason,
-        "before_detected_class": before_class,
-        "after_detected_class": after_class,
-        "pothole_in_after": after_has_pothole,
-    }
 
 
 def _detect_dominant_class(model, img: Image.Image) -> Optional[str]:

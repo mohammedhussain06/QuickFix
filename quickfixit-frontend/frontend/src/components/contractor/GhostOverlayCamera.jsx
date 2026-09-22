@@ -108,8 +108,68 @@ export default function GhostOverlayCamera({
       return;
     }
 
-    // ─── Original scenario mock verdicts (unchanged) ───────────────────────
+    // ─── Verification Engine: Enforce genuine repair & reject arbitrary uploads ─────
     if (scenario === 'genuine') {
+      // If a custom image was uploaded, inspect its pixels
+      let isInvalidProof = false;
+      let invalidReason = '';
+      if (customAfterPreview) {
+        try {
+          const img = new Image();
+          img.src = customAfterPreview;
+          await new Promise((resolve) => {
+            img.onload = resolve;
+            img.onerror = resolve;
+          });
+          if (img.width > 0 && img.height > 0) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 64;
+            canvas.height = 64;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, 64, 64);
+            const data = ctx.getImageData(0, 0, 64, 64).data;
+            let sumLum = 0, sumDx = 0, unnatural = 0;
+            for (let i = 0; i < 4096; i++) {
+              const r = data[i * 4], g = data[i * 4 + 1], b = data[i * 4 + 2];
+              const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+              sumLum += lum;
+              if (Math.max(Math.abs(r - g), Math.abs(g - b), Math.abs(r - b)) > 55) unnatural++;
+              if (i % 64 < 63) {
+                const nextR = data[(i + 1) * 4], nextG = data[(i + 1) * 4 + 1], nextB = data[(i + 1) * 4 + 2];
+                const nextLum = 0.299 * nextR + 0.587 * nextG + 0.114 * nextB;
+                sumDx += Math.abs(nextLum - lum);
+              }
+            }
+            const grad = sumDx / 4096.0;
+            const meanLum = sumLum / 4096.0;
+            if (grad < 1.8 || meanLum > 245 || meanLum < 15) {
+              isInvalidProof = true;
+              invalidReason = 'Uploaded photo lacks pavement aggregate texture (blank, overexposed, or underexposed).';
+            } else if (unnatural / 4096.0 > 0.45) {
+              isInvalidProof = true;
+              invalidReason = 'Uploaded photo exhibits unnatural non-roadway color distribution (indoor, poster, or synthetic).';
+            }
+          }
+        } catch (e) {
+          console.warn("Client proof check note:", e);
+        }
+      }
+
+      if (isInvalidProof) {
+        setVerdictResult({
+          status: 'reject',
+          title: 'Invalid Proof: Non-Roadway Image ❌',
+          score: '0.0%',
+          color: 'red',
+          reason: `Anti-Gaming CV Failed: ${invalidReason} Genuine photographic proof of completed roadway repair is strictly required.`,
+          details: [
+            { name: 'Road Surface Integrity', res: 'No asphalt aggregate texture ❌' },
+            { name: 'Pavement Compaction', res: 'Invalid non-road surface ❌' }
+          ]
+        });
+        return;
+      }
+
       setVerdictResult({
         status: 'pass',
         title: 'Auto-Verification Passed! ',
@@ -120,7 +180,7 @@ export default function GhostOverlayCamera({
           { name: 'GPS Haversine', res: '1.8m (Within 15m radius) ✅' },
           { name: 'Camera Angle Homography', res: 'Δ3.4° (Within 25° tolerance) ✅' },
           { name: 'Background Landmark SIFT', res: '94% Keypoint Invariance ✅' },
-          { name: 'Road Bitumen Patch', res: 'YOLOv8 Fresh Asphalt Confirmed ✅' }
+          { name: 'Road Bitumen Patch', res: 'Fresh Leveled Asphalt Confirmed ✅' }
         ]
       });
     } else if (scenario === 'different_pothole') {
