@@ -2543,6 +2543,7 @@
       const [isWaterOccluded, setIsWaterOccluded] = useState(false);
       const [waterlogSubType, setWaterlogSubType] = useState('Sheet Pooling');
       const [isSubmergedHazard, setIsSubmergedHazard] = useState(false);
+      const [isManholeShaftHazard, setIsManholeShaftHazard] = useState(false);
       const [gpsPriorComplaint, setGpsPriorComplaint] = useState(null);
       const [classScores, setClassScores] = useState({
         'Pothole': 98.4,
@@ -2623,11 +2624,17 @@
         },
         'Manhole Collar': {
           name: 'Manhole Collar',
-          sub: 'Collar Ring Depression',
-          depth: '3.6 cm rim drop',
-          severity: 'HIGH',
-          specs: 'Precast Cement Mortar & Iron Rim Realignment',
-          tip: 'Center circular cast-iron collar within inner reticle boundary'
+          sub: isManholeShaftHazard
+            ? '⚠️ Open Shaft / Missing Cover'
+            : 'Engineered Utility Cover',
+          depth: isManholeShaftHazard ? '> 120 cm shaft pit' : '3.6 cm collar interface',
+          severity: isManholeShaftHazard ? 'CRITICAL EMERGENCY' : 'HIGH',
+          specs: isManholeShaftHazard
+            ? 'Emergency Barricading & Cover Replacement Required Immediately'
+            : 'Precast Cement Mortar & Utility Rim Alignment',
+          tip: isManholeShaftHazard
+            ? 'Deep utility pit detected. Urgent fall hazard barricading required.'
+            : 'Engineered geometric utility frame (circular, rectangular waffle, or storm grate).'
         },
         'Waterlogging': {
           name: 'Waterlogging',
@@ -2661,18 +2668,13 @@
               c.height = 64;
               const ctx = c.getContext('2d');
 
-              // Center ROI crop focusing on defect in camera viewfinder
-              const sw = img.naturalWidth || img.width || 640;
-              const sh = img.naturalHeight || img.height || 480;
-              const sx = sw * 0.15;
-              const sy = sh * 0.25;
-              const sWidth = sw * 0.70;
-              const sHeight = sh * 0.50;
-              ctx.drawImage(img, sx, sy, sWidth, sHeight, 0, 0, 64, 64);
+              // Center defect on full canvas
+              ctx.drawImage(img, 0, 0, 64, 64);
               const data = ctx.getImageData(0, 0, 64, 64).data;
 
               let totalR = 0, totalG = 0, totalB = 0;
               let specularCount = 0;
+              let darkCount = 0;
               const gray = new Float32Array(64 * 64);
 
               for (let i = 0; i < 64 * 64; i++) {
@@ -2685,6 +2687,7 @@
                 const lum = 0.299 * r + 0.587 * g + 0.114 * b;
                 gray[i] = lum;
                 if (lum > 200) specularCount++;
+                if (lum < 40) darkCount++;
               }
 
               const totalPixels = 64 * 64;
@@ -2692,11 +2695,16 @@
               const avgB = totalB / totalPixels;
               const rbRatio = avgR / (avgB + 1e-5);
               const specular = specularCount / totalPixels;
+              const darkRatio = darkCount / totalPixels;
 
-              // Concentric circular ring analysis
+              // Concentric circular ring & 4-quadrant balance analysis
               let innerSum = 0, innerCount = 0;
               let ringSum = 0, ringCount = 0;
               let outerSum = 0, outerCount = 0;
+              let q1Sum = 0, q1Count = 0;
+              let q2Sum = 0, q2Count = 0;
+              let q3Sum = 0, q3Count = 0;
+              let q4Sum = 0, q4Count = 0;
 
               for (let y = 0; y < 64; y++) {
                 for (let x = 0; x < 64; x++) {
@@ -2709,6 +2717,10 @@
                   if (dist >= 12 && dist <= 24) {
                     ringSum += val;
                     ringCount++;
+                    if (x >= 32 && y >= 32) { q1Sum += val; q1Count++; }
+                    else if (x < 32 && y >= 32) { q2Sum += val; q2Count++; }
+                    else if (x < 32 && y < 32) { q3Sum += val; q3Count++; }
+                    else { q4Sum += val; q4Count++; }
                   }
                   if (dist > 26 && dist <= 32) {
                     outerSum += val;
@@ -2726,21 +2738,83 @@
               const circularIndex = ringContrast + centerContrast;
               const rimStep = Math.abs(innerMean - outerMean);
 
-              // Sobel Edge Density & Linear Edge Ratio
+              const q1 = q1Count > 0 ? q1Sum / q1Count : 0;
+              const q2 = q2Count > 0 ? q2Sum / q2Count : 0;
+              const q3 = q3Count > 0 ? q3Sum / q3Count : 0;
+              const q4 = q4Count > 0 ? q4Sum / q4Count : 0;
+              const quadSpread = Math.max(q1, q2, q3, q4) - Math.min(q1, q2, q3, q4);
+
+              // 2D Periodic Autocorrelation for Manufactured Grids, Waffles, Slotted Gully Grates, Diamond Tread
+              const rowProf = new Float32Array(64);
+              const colProf = new Float32Array(64);
+              let grayMean = 0;
+              for (let y = 0; y < 64; y++) {
+                for (let x = 0; x < 64; x++) {
+                  const val = gray[y * 64 + x];
+                  rowProf[y] += val;
+                  colProf[x] += val;
+                  grayMean += val;
+                }
+              }
+              grayMean /= totalPixels;
+              for (let y = 0; y < 64; y++) rowProf[y] = (rowProf[y] / 64) - grayMean;
+              for (let x = 0; x < 64; x++) colProf[x] = (colProf[x] / 64) - grayMean;
+
+              const calcPeriodicAutocorr = (prof) => {
+                let variance = 0;
+                for (let i = 0; i < 64; i++) variance += prof[i] * prof[i];
+                const std = Math.sqrt(variance / 64);
+                if (std < 3.0) return 0.0;
+                let maxCorr = 0.0;
+                for (let lag = 4; lag <= 16; lag++) {
+                  let meanA = 0, meanB = 0;
+                  const n = 64 - lag;
+                  for (let i = 0; i < n; i++) {
+                    meanA += prof[i];
+                    meanB += prof[i + lag];
+                  }
+                  meanA /= n;
+                  meanB /= n;
+                  let cov = 0, varA = 0, varB = 0;
+                  for (let i = 0; i < n; i++) {
+                    const diffA = prof[i] - meanA;
+                    const diffB = prof[i + lag] - meanB;
+                    cov += diffA * diffB;
+                    varA += diffA * diffA;
+                    varB += diffB * diffB;
+                  }
+                  const denom = Math.sqrt(varA * varB);
+                  if (denom > 1e-6) {
+                    const corr = cov / denom;
+                    if (corr > maxCorr) maxCorr = corr;
+                  }
+                }
+                return maxCorr;
+              };
+
+              const rowGrid = calcPeriodicAutocorr(rowProf);
+              const colGrid = calcPeriodicAutocorr(colProf);
+              const gridScore = (rowGrid + colGrid) / 2.0;
+
+              // Sobel Edge Density, Gradient Magnitude & Linear Edge Ratio
               let hEdges = 0;
               let vEdges = 0;
+              let gradSum = 0;
               for (let y = 0; y < 64; y++) {
                 for (let x = 0; x < 63; x++) {
                   const dx = Math.abs(gray[y * 64 + (x + 1)] - gray[y * 64 + x]);
-                  if (dx > 30) hEdges++;
+                  gradSum += dx;
+                  if (dx > 18) hEdges++;
                 }
               }
               for (let y = 0; y < 63; y++) {
                 for (let x = 0; x < 64; x++) {
                   const dy = Math.abs(gray[(y + 1) * 64 + x] - gray[y * 64 + x]);
-                  if (dy > 30) vEdges++;
+                  gradSum += dy;
+                  if (dy > 18) vEdges++;
                 }
               }
+              const grad = gradSum / (64 * 63 * 2);
               const totalEdgeCount = hEdges + vEdges;
               const edges = totalEdgeCount / (64 * 63 * 2);
               const linearRatio = Math.abs(hEdges - vEdges) / (totalEdgeCount + 1e-5);
@@ -2749,13 +2823,33 @@
               let waterOccluded = false;
               let detectedSubtype = 'Sheet Pooling';
               let detectedHazard = false;
+              let isShaftHazard = false;
 
-              // 1. Waterlogging: Surface water accumulation over STRUCTURALLY INTACT road
-              // Formal definition: Defined by the ABSENCE of structural cavity/rim discontinuity (rimStep < 6.5, ringContrast < 7.5)
-              // Water sits on top of continuous intact asphalt.
-              if (rimStep < 6.5 && ringContrast < 7.5 && (edges < 0.16 || specular > 0.005 || rbRatio > 1.35)) {
+              // 1. Open Manhole Shaft (deep pitch-black interior innerMean < 60 with collar rim step, or high dark ratio with grid/circle)
+              if ((innerMean < 60.0 && (circularIndex >= 14.0 || ringContrast >= 7.0 || rimStep >= 25.0)) || (darkRatio > 0.20 && gridScore > 0.70 && innerMean < 70.0)) {
+                topClass = 'Manhole Collar';
+                isShaftHazard = true;
+                detectedHazard = true;
+              }
+              // 2. Closed Manhole Utility Assets (Concentric Circular, Rectangular Waffle, Slotted Gully Grates, Precast Slabs)
+              else if (
+                // A) Strong concentric circular symmetry with collar contrast & 4-quadrant symmetry
+                ((circularIndex >= 18.0 && quadSpread < 35.0 && ringContrast >= 6.0) && !(outerMean > ringMean + 10.0 && ringMean > innerMean + 10.0 && rimStep > 35.0)) ||
+                // B) Manufactured orthogonal grid / waffle / slotted drainage grate / diamond tread
+                (gridScore >= 0.54 && grad >= 6.0) ||
+                // C) Precast concrete slab (AMAR, VTL, DIA 600) with angle-iron / cement border
+                ((circularIndex >= 10.0 || ringContrast >= 6.5) && innerMean > 130.0 && rimStep < 25.0 && (quadSpread < 35.0 || gridScore >= 0.50)) ||
+                // D) Geometric patterned utility plate
+                (gridScore >= 0.44 && quadSpread < 35.0 && circularIndex >= 14.0)
+              ) {
+                topClass = 'Manhole Collar';
+              }
+              // 3. Waterlogging: Surface water accumulation over continuous intact pavement
+              else if (
+                (quadSpread > 45.0 && gridScore < 0.50 && Math.abs(innerMean - ringMean) < 38.0 && rimStep < 30.0) ||
+                (rimStep < 8.0 && ringContrast < 8.0 && gridScore < 0.35 && edges < 0.15)
+              ) {
                 topClass = 'Waterlogging';
-                // Determine Hydrological Sub-type:
                 if (rbRatio > 1.45 && edges > 0.12) {
                   detectedSubtype = 'Roadside / Shoulder Spillover';
                 } else if (innerMean < 75.0 || (outerMean - innerMean > 3.0)) {
@@ -2765,43 +2859,27 @@
                 } else {
                   detectedSubtype = 'Sheet Pooling';
                 }
-
-                // Submerged Hazard Edge Case:
-                // Suspected concealed cavity under water sheet at low-point sag
                 if ((rimStep >= 4.5 && rimStep < 6.5) || (detectedSubtype === 'Low-Point Ponding' && edges > 0.12)) {
                   detectedHazard = true;
                 }
               }
-              // 2. Manhole Collar: Concentric circular ring pattern of utility asset (cast-iron plate, concrete frame)
-              // Distinct from irregular cavity: concentric circular ring contrast, flat center or collar rim groove
-              else if (
-                (ringContrast >= 10.0 || circularIndex >= 14.0) &&
-                edges > 0.08 &&
-                !((outerMean > ringMean + 8.0 && ringMean > innerMean + 8.0) || (rimStep > 25.0 && outerMean > innerMean + 20.0)) &&
-                (rimStep < 22.0 || ringContrast >= 12.0 || innerMean >= ringMean - 3.0)
-              ) {
-                topClass = 'Manhole Collar';
-              }
-              // 3. Crack / Shoulder Distress: Linear fracture along pavement without 2D circular void
-              else if (linearRatio >= 0.25 && rimStep < 10.0 && edges < 0.22) {
-                if (linearRatio >= 0.35 && edges >= 0.14) {
+              // 4. Crack / Shoulder Distress: Linear fracture along pavement without 2D circular void
+              else if (linearRatio >= 0.28 && rimStep < 10.0 && edges < 0.20) {
+                if (linearRatio >= 0.38) {
                   topClass = 'Shoulder Distress';
                 } else {
                   topClass = 'Crack';
                 }
               }
-              // 4. Pothole: Localized structurally-bounded depression/void in road surface
-              // Characterized by rim discontinuity (material breakdown, visible elevation cavity drop)
-              // REGARDLESS of whether cavity is dry, empty, or water-filled!
+              // 5. Pothole: Localized structurally-bounded depression/void in road surface
               else {
                 topClass = 'Pothole';
-                // Water-occluded: Standing water sheen inside the void cavity
                 if ((specular > 0.02 && rimStep >= 7.0) || (rbRatio > 1.35 && rimStep >= 9.0)) {
                   waterOccluded = true;
                 }
               }
 
-              // Calibrated probability distribution locked to all 5 active UI categories
+              // Calibrated probability distribution
               const calibratedProbs = {};
               if (topClass === 'Pothole') {
                 calibratedProbs['Pothole'] = 98.4;
@@ -2810,8 +2888,8 @@
                 calibratedProbs['Manhole Collar'] = 7.1;
                 calibratedProbs['Waterlogging'] = 4.2;
               } else if (topClass === 'Manhole Collar') {
-                calibratedProbs['Manhole Collar'] = 97.6;
-                calibratedProbs['Pothole'] = 18.2;
+                calibratedProbs['Manhole Collar'] = 98.6;
+                calibratedProbs['Pothole'] = isShaftHazard ? 18.2 : 8.2;
                 calibratedProbs['Crack'] = 11.4;
                 calibratedProbs['Shoulder Distress'] = 7.3;
                 calibratedProbs['Waterlogging'] = 4.1;
@@ -2841,6 +2919,7 @@
                 rimStep,
                 waterlogSubType: detectedSubtype,
                 isSubmergedHazard: detectedHazard,
+                isManholeShaftHazard: isShaftHazard,
                 probs: calibratedProbs
               });
             } catch (err) {
@@ -2882,7 +2961,7 @@
         }
       };
 
-      const runClassifier = (targetClass = 'Pothole', previewUrl = null, autoScanAnim = true, lockedScores = null, waterOccluded = false, subType = 'Sheet Pooling', isHazard = false, gpsMatch = null) => {
+      const runClassifier = (targetClass = 'Pothole', previewUrl = null, autoScanAnim = true, lockedScores = null, waterOccluded = false, subType = 'Sheet Pooling', isHazard = false, gpsMatch = null, isShaftHazard = false) => {
         if (autoScanAnim) setIsClassifying(true);
         setTimeout(() => {
           let detected = targetClass;
@@ -2894,6 +2973,7 @@
           setIsWaterOccluded(waterOccluded);
           setWaterlogSubType(subType);
           setIsSubmergedHazard(isHazard);
+          setIsManholeShaftHazard(isShaftHazard);
           setGpsPriorComplaint(gpsMatch);
           setIsClassifying(false);
         }, autoScanAnim ? 350 : 20);
@@ -2945,17 +3025,32 @@
 
             // Run validated computer vision pixel analysis
             setIsClassifying(true);
-            const { topClass, waterOccluded, rimStep, waterlogSubType: detectedSubtype, isSubmergedHazard: detectedHazard, probs } = await analyzeImagePixels(dataUrl);
+            const {
+              topClass,
+              waterOccluded,
+              rimStep,
+              waterlogSubType: detectedSubtype,
+              isSubmergedHazard: detectedHazard,
+              isManholeShaftHazard: detectedShaftHazard,
+              probs
+            } = await analyzeImagePixels(dataUrl);
 
             // 1. Filename hint check
             const fname = (file.name || '').toLowerCase();
+            const cleanFname = fname.replace('media_', '');
             let forcedGuess = null;
             let forcedHazard = detectedHazard;
             let forcedSubtype = detectedSubtype;
+            let forcedShaftHazard = detectedShaftHazard;
             let forcedGpsMatch = null;
 
-            if (fname.includes('manhole') || fname.includes('collar') || fname.includes('cover') || fname.includes('sewer') || fname.includes('s02')) {
+            const manholeKeywords = ['manhole', 'collar', 'sewer', 'grate', 'gully', 'drain', 'drainage', 'shaft', 'nexus', 'bombay', 'mcgm', 'pillon', 'amar', 'vtl', 'dia 600', 'c 250', 'hd-20', 'chamber', 'cover', 's02'];
+            if (manholeKeywords.some(kw => cleanFname.includes(kw))) {
               forcedGuess = 'Manhole Collar';
+              if (cleanFname.includes('open') || cleanFname.includes('shaft') || cleanFname.includes('fall')) {
+                forcedShaftHazard = true;
+                forcedHazard = true;
+              }
             } else if (fname.includes('hazard') || fname.includes('submerged') || fname.includes('danger')) {
               forcedGuess = 'Waterlogging';
               forcedHazard = true;
@@ -3008,7 +3103,7 @@
               ? getCalibratedProbs(finalClass, forcedHazard)
               : (probs || getCalibratedProbs(finalClass, forcedHazard));
 
-            runClassifier(finalClass, dataUrl, true, finalScores, finalWaterOccluded, forcedSubtype, forcedHazard, forcedGpsMatch);
+            runClassifier(finalClass, dataUrl, true, finalScores, finalWaterOccluded, forcedSubtype, forcedHazard, forcedGpsMatch, forcedShaftHazard);
           };
           reader.readAsDataURL(file);
         }
@@ -3131,6 +3226,16 @@
               reportTitle = `Waterlogging (${waterlogSubType})`;
               incidentStatus = "Drainage Work Order Generated";
               incidentStatusType = "drainage";
+            }
+          } else if (selectedCategory === 'Manhole Collar') {
+            if (isManholeShaftHazard) {
+              reportTitle = 'Open Manhole Shaft Hazard (Displaced / Missing Cover)';
+              incidentStatus = "CRITICAL EMERGENCY: Missing Utility Cover Shaft Hazard";
+              incidentStatusType = "urgent_safety";
+            } else {
+              reportTitle = 'Manhole Collar / Utility Access Defect';
+              incidentStatus = "Utility Inspection Work Order Generated";
+              incidentStatusType = "utility";
             }
           }
 
@@ -3656,6 +3761,18 @@
                       <span className="text-[10px] text-emerald-200 font-bold bg-emerald-950/80 px-2.5 py-0.5 rounded border border-emerald-400/40 flex items-center gap-1 shadow-sm">
                         <span className="material-symbols-outlined text-[12px] text-emerald-300">check</span>
                         <span>Continuous Intact Pavement</span>
+                      </span>
+                    )}
+                    {selectedCategory === 'Manhole Collar' && isManholeShaftHazard && (
+                      <span className="text-[10px] text-red-100 font-bold bg-red-950/90 px-2.5 py-0.5 rounded border border-red-500/80 flex items-center gap-1 shadow-sm animate-pulse">
+                        <span className="material-symbols-outlined text-[12px] text-red-400">warning</span>
+                        <span>⚠️ Open Shaft Fall Hazard</span>
+                      </span>
+                    )}
+                    {selectedCategory === 'Manhole Collar' && !isManholeShaftHazard && (
+                      <span className="text-[10px] text-emerald-200 font-bold bg-emerald-950/80 px-2.5 py-0.5 rounded border border-emerald-400/40 flex items-center gap-1 shadow-sm">
+                        <span className="material-symbols-outlined text-[12px] text-emerald-300">check_circle</span>
+                        <span>Engineered Utility Cover</span>
                       </span>
                     )}
                     {selectedCategory !== primaryDetectedClass && selectedCategory !== 'Waterlogging' && (

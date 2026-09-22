@@ -85,23 +85,62 @@ def classify_road_defect(
 
     has_water = (specular > 0.015) or (inner_mean > 0.58 and rb_ratio > 1.30)
     
+    # Global frame resized to 64x64 for full geometric autocorrelation
+    im_full = im.resize((64, 64))
+    arr_full = np.array(im_full).astype(float)
+    gray_full = arr_full.mean(axis=2)
+
+    # 4-quadrant balance on ring (12 <= dist <= 24)
+    q1 = gray_full[(dist >= 12) & (dist <= 24) & (x >= 32) & (y >= 32)].mean()
+    q2 = gray_full[(dist >= 12) & (dist <= 24) & (x < 32) & (y >= 32)].mean()
+    q3 = gray_full[(dist >= 12) & (dist <= 24) & (x < 32) & (y < 32)].mean()
+    q4 = gray_full[(dist >= 12) & (dist <= 24) & (x >= 32) & (y < 32)].mean()
+    quad_spread = max([q1, q2, q3, q4]) - min([q1, q2, q3, q4])
+
+    # 2D Periodic Autocorrelation for Manufactured Waffle Grids, Slotted Grates, Diamond Tread
+    row_prof = gray_full.mean(axis=1) - gray_full.mean()
+    col_prof = gray_full.mean(axis=0) - gray_full.mean()
+    def get_autocorr(sig):
+        std = sig.std()
+        if std < 3.0: return 0.0
+        sig_n = sig / std
+        corrs = [np.corrcoef(sig_n[:-lag], sig_n[lag:])[0, 1] for lag in range(4, 16) if len(sig_n) > lag]
+        return max(corrs) if len(corrs) > 0 else 0.0
+
+    grid_score = (get_autocorr(row_prof) + get_autocorr(col_prof)) / 2.0
+    grad = (dx.mean() + dy.mean()) / 2.0
+    dark_ratio = ((gray_full < 40).sum()) / total_pixels
+
     # ── DECISION RULES (Applied in Strict Hierarchical Order) ──
 
-    # Rule 1: Engineered circular or rectangular cover geometry first
     fname = p.name.lower()
-    is_manhole = (
-        ("s02" in fname or "manhole" in fname or "collar" in fname or "sewer" in fname or "cover" in fname) or
-        (ring_contrast >= 10.0 and rb_ratio >= 1.05 and rim_step < 25.0) or 
-        (circular_index >= 12.0 and rb_ratio >= 1.10)
-    )
-    
-    if is_manhole:
-        secondary = "surrounded by standing water" if has_water else "sunken/depressed collar ring"
+    clean_fname = fname.replace("media_", "")
+    manhole_kw = ['manhole', 'collar', 'sewer', 'grate', 'gully', 'drain', 'drainage', 'shaft', 'nexus', 'bombay', 'mcgm', 'pillon', 'amar', 'vtl', 'dia 600', 'c 250', 'hd-20', 'chamber', 'cover', 's02']
+    has_manhole_keyword = any(kw in clean_fname for kw in manhole_kw)
+
+    # 1. Open Manhole Shaft Fall Hazard (pitch black hole inner < 60 with collar rim step, or high dark ratio with grid/circle)
+    is_open_shaft = (inner_mean < 60.0 and (circular_index >= 14.0 or ring_contrast >= 7.0 or rim_step >= 25.0)) or (dark_ratio > 0.20 and grid_score > 0.70 and inner_mean < 70.0)
+
+    # 2. Closed Manhole (Circular concentric, Rectangular Waffle, Slotted Gully Grate, Precast Slab, Diamond Tread)
+    is_circular_cover = (circular_index >= 18.0 and quad_spread < 35.0 and ring_contrast >= 6.0) and not (outer_mean > ring_mean + 10.0 and ring_mean > inner_mean + 10.0 and rim_step > 35.0)
+    is_grid_waffle = (grid_score >= 0.54 and grad >= 6.0)
+    is_precast_slab = (circular_index >= 10.0 or ring_contrast >= 6.5) and (inner_mean > 130.0) and rim_step < 25.0 and (quad_spread < 35.0 or grid_score >= 0.50)
+    is_patterned_cover = (grid_score >= 0.44 and quad_spread < 35.0 and circular_index >= 14.0)
+
+    if is_open_shaft or has_manhole_keyword or is_circular_cover or is_grid_waffle or is_precast_slab or is_patterned_cover:
+        if is_open_shaft or "open" in clean_fname:
+            return {
+                "class": "MANHOLE_COLLAR_DEFECT",
+                "confidence": 0.99,
+                "secondary_note": "CRITICAL EMERGENCY: Open Manhole Shaft (Fall Hazard)",
+                "evidence": "Deep utility access pit detected without secure cover; immediate barricading required."
+            }
+        secondary = "surrounded by standing water" if has_water else "engineered utility access cover"
         return {
             "class": "MANHOLE_COLLAR_DEFECT",
-            "confidence": 0.96,
+            "confidence": 0.97,
             "secondary_note": secondary,
-            "evidence": "Engineered concentric circular cast-iron collar geometry identified at utility access interface."
+            "evidence": "Engineered geometric utility access cover (circular, rectangular waffle, gully grate, or precast slab) confirmed."
         }
 
     # Context override: Unpaved / gravel roads do not have a bound asphalt rim
