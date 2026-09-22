@@ -1,5 +1,18 @@
-# training/dataset.yaml — YOLOv8 dataset configuration
-path: C:/Users/Mohammed Hussain/.gemini/antigravity-ide/scratch/quickfix/quickfixit-backend/datasets/pothole_segmentation   # root dataset directory
+# training/dataset.yaml - YOLOv8 dataset configuration
+# Civil Engineering Defect Taxonomy & Model Reframe:
+#
+# 0: pothole      - Localized, structurally-bounded depression or void in the road surface
+#                   caused by breakdown of pavement material (asphalt/aggregate binder failure),
+#                   characterized by a discontinuity in the road surface at its rim - exposed sub-base,
+#                   cracked/crumbling edges, or visible drop in surface level relative to surrounding
+#                   intact pavement - REGARDLESS of whether the cavity is currently dry, empty, or
+#                   filled with standing water. Water is a secondary seasonal occlusion attribute.
+# 1: road_damage  - Longitudinal cracks, fatigue alligator cracking, or shoulder fissures.
+# 2: road_patch   - Bitumen/asphalt compacted patch restoring pavement continuity and sealing rim void.
+# 3: intact_road  - Structurally continuous undamaged road surface (including surface sheet waterlogging
+#                   where pavement beneath is continuous and unbroken).
+
+path: C:/Users/Mohammed Hussain/.gemini/antigravity-ide/scratch/quickfix/quickfixit-backend/datasets/pothole_segmentation
 train: images/train
 val: images/val
 test: images/val

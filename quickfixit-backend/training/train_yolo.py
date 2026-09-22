@@ -1,17 +1,27 @@
 """
-training/train.py — YOLOv8 Pothole Detection Fine-Tuning [GPU Accelerated]
+training/train_yolo.py — YOLOv8 Pothole Structural Void Fine-Tuning [GPU Accelerated]
 
-Features:
-  1. Auto-detects NVIDIA RTX GPU with FP16 AMP
-  2. Uses YOLOv8n object detection model (matches bounding box dataset)
-  3. Cleans stale cache files and incomplete runs automatically
-  4. Automatically integrates user's 18 before/after road pairs (36 images)
-  5. Trains for requested epochs (default: 25)
-  6. Saves best weights to: models/pothole_yolov8/weights/best.pt
+Civil Engineering Taxonomy & Model Reframe:
+  1. Pothole:
+     A localized, structurally-bounded depression or void in the road surface caused by
+     the breakdown of pavement material (asphalt/aggregate binder failure), characterized
+     by a discontinuity in the road surface at its rim — exposed sub-base material,
+     cracked/crumbling edges, or a visible drop in surface level relative to the surrounding
+     intact pavement — REGARDLESS of whether the cavity is currently dry, empty, or filled
+     with standing water.
+  2. Waterlogging:
+     A surface condition where water accumulates on top of an otherwise structurally intact road,
+     due to poor drainage, camber, or heavy rainfall — with NO underlying structural discontinuity;
+     the pavement beneath the water, if drained, would be continuous and undamaged.
+  3. Key Model Reframe:
+     A pothole is defined by the pavement structure (rim discontinuity & structural cavity void),
+     not by what's inside it. Standing water is an occasional, seasonal occlusion of the same
+     underlying defect. The model is trained to detect the structural void and rim boundary,
+     treating water as a secondary attribute rather than a competing class.
 
 Usage:
-    python training/train.py --epochs 25
-    python training/train.py --epochs 50
+    python training/train_yolo.py --epochs 25
+    python training/train_yolo.py --epochs 50
 """
 
 import argparse

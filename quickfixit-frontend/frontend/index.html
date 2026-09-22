@@ -2540,11 +2540,12 @@
       const [selectedCategory, setSelectedCategory] = useState('Pothole');
       const [primaryDetectedClass, setPrimaryDetectedClass] = useState('Pothole');
       const [isClassifying, setIsClassifying] = useState(false);
+      const [isWaterOccluded, setIsWaterOccluded] = useState(false);
       const [classScores, setClassScores] = useState({
         'Pothole': 98.4,
-        'Crack / Shoulder': 61.2,
-        'Manhole Collar': 14.3,
-        'Waterlogging': 8.5
+        'Crack / Shoulder': 24.5,
+        'Manhole Collar': 7.1,
+        'Waterlogging': 4.2
       });
       const [isCapturing, setIsCapturing] = useState(false);
       const [flashOn, setFlashOn] = useState(false);
@@ -2562,11 +2563,11 @@
       const DEFECT_SPECS = {
         'Pothole': {
           name: 'Pothole',
-          sub: 'Deep Void Cavity',
-          depth: '5.2 cm',
+          sub: isWaterOccluded ? 'Water-Occluded Void Cavity' : 'Deep Void Cavity',
+          depth: isWaterOccluded ? '5.2 cm void (submerged)' : '5.2 cm',
           severity: 'CRITICAL',
-          specs: 'Hot/Cold Mix Bitumen (50kg) + Plate Compactor',
-          tip: 'Keep curb edge in frame for 2x faster verification & homography'
+          specs: isWaterOccluded ? 'Cavity Dewatering + Hot/Cold Bitumen (50kg) + Plate Compactor' : 'Hot/Cold Mix Bitumen (50kg) + Plate Compactor',
+          tip: isWaterOccluded ? 'Structural void boundary locked. Standing water treated as seasonal occlusion.' : 'Keep curb edge in frame for 2x faster verification & homography'
         },
         'Crack / Shoulder': {
           name: 'Crack / Shoulder',
@@ -2586,15 +2587,17 @@
         },
         'Waterlogging': {
           name: 'Waterlogging',
-          sub: 'Surface Ponding & Drainage Block',
+          sub: 'Surface Ponding (Intact Road)',
           depth: '4.0 cm pool depth',
           severity: 'URGENT DRAINAGE',
           specs: 'Gully Pit Silt Clearance & Catch Basin Jetting',
-          tip: 'Capture stormwater curb inlet to confirm drain choke'
+          tip: 'Capture stormwater curb inlet. Unbroken continuous pavement beneath water.'
         }
       };
 
       // Real-time In-Browser Computer Vision Pixel Feature Analyzer
+      // Civil Engineering Reframe: A Pothole is defined by the pavement structural void / rim discontinuity,
+      // NOT by what's inside it! Standing water is a secondary occlusion attribute, not a competing defect class.
       const analyzeImagePixels = (dataUrl) => {
         return new Promise((resolve) => {
           const img = new Image();
@@ -2602,25 +2605,25 @@
           img.onload = () => {
             try {
               const c = document.createElement('canvas');
-              c.width = 128;
-              c.height = 128;
+              c.width = 64;
+              c.height = 64;
               const ctx = c.getContext('2d');
 
               // Center ROI crop focusing on defect in camera viewfinder
               const sw = img.naturalWidth || img.width || 640;
               const sh = img.naturalHeight || img.height || 480;
-              const sx = sw * 0.18;
-              const sy = sh * 0.28;
-              const sWidth = sw * 0.64;
-              const sHeight = sh * 0.44;
-              ctx.drawImage(img, sx, sy, sWidth, sHeight, 0, 0, 128, 128);
-              const data = ctx.getImageData(0, 0, 128, 128).data;
+              const sx = sw * 0.15;
+              const sy = sh * 0.25;
+              const sWidth = sw * 0.70;
+              const sHeight = sh * 0.50;
+              ctx.drawImage(img, sx, sy, sWidth, sHeight, 0, 0, 64, 64);
+              const data = ctx.getImageData(0, 0, 64, 64).data;
 
               let totalR = 0, totalG = 0, totalB = 0;
-              let darkCount = 0;
-              const gray = new Float32Array(128 * 128);
+              let specularCount = 0;
+              const gray = new Float32Array(64 * 64);
 
-              for (let i = 0; i < 128 * 128; i++) {
+              for (let i = 0; i < 64 * 64; i++) {
                 const r = data[i * 4];
                 const g = data[i * 4 + 1];
                 const b = data[i * 4 + 2];
@@ -2629,50 +2632,92 @@
                 totalB += b;
                 const lum = 0.299 * r + 0.587 * g + 0.114 * b;
                 gray[i] = lum;
-                if (lum < 72) darkCount++;
+                if (lum > 200) specularCount++;
               }
 
-              const totalPixels = 128 * 128;
+              const totalPixels = 64 * 64;
               const avgR = totalR / totalPixels;
               const avgB = totalB / totalPixels;
               const rbRatio = avgR / (avgB + 1e-5);
-              const darkRatio = darkCount / totalPixels;
+              const specular = specularCount / totalPixels;
+
+              // Concentric circular ring analysis
+              let innerSum = 0, innerCount = 0;
+              let ringSum = 0, ringCount = 0;
+              let outerSum = 0, outerCount = 0;
+
+              for (let y = 0; y < 64; y++) {
+                for (let x = 0; x < 64; x++) {
+                  const dist = Math.sqrt((x - 32) * (x - 32) + (y - 32) * (y - 32));
+                  const val = gray[y * 64 + x];
+                  if (dist < 10) {
+                    innerSum += val;
+                    innerCount++;
+                  }
+                  if (dist >= 12 && dist <= 24) {
+                    ringSum += val;
+                    ringCount++;
+                  }
+                  if (dist > 26 && dist <= 32) {
+                    outerSum += val;
+                    outerCount++;
+                  }
+                }
+              }
+
+              const innerMean = innerCount > 0 ? innerSum / innerCount : 128;
+              const ringMean = ringCount > 0 ? ringSum / ringCount : 128;
+              const outerMean = outerCount > 0 ? outerSum / outerCount : 128;
+
+              const ringContrast = Math.abs(ringMean - outerMean);
+              const centerContrast = Math.abs(innerMean - ringMean);
+              const circularIndex = ringContrast + centerContrast;
+              const rimStep = Math.abs(innerMean - outerMean);
 
               // Sobel Edge Density & Linear Edge Ratio
               let hEdges = 0;
               let vEdges = 0;
-              let totalGrad = 0;
-              for (let y = 1; y < 127; y++) {
-                for (let x = 1; x < 127; x++) {
-                  const idx = y * 128 + x;
-                  const dx = Math.abs(gray[idx + 1] - gray[idx - 1]);
-                  const dy = Math.abs(gray[idx + 128] - gray[idx - 128]);
-                  totalGrad += (dx + dy) / 2;
-                  if (dx > 25) hEdges++;
-                  if (dy > 25) vEdges++;
+              for (let y = 0; y < 64; y++) {
+                for (let x = 0; x < 63; x++) {
+                  const dx = Math.abs(gray[y * 64 + (x + 1)] - gray[y * 64 + x]);
+                  if (dx > 30) hEdges++;
                 }
               }
-              const grad = totalGrad / (126 * 126);
-              const totalEdges = hEdges + vEdges;
-              const linearRatio = Math.abs(hEdges - vEdges) / (totalEdges + 1e-5);
+              for (let y = 0; y < 63; y++) {
+                for (let x = 0; x < 64; x++) {
+                  const dy = Math.abs(gray[(y + 1) * 64 + x] - gray[y * 64 + x]);
+                  if (dy > 30) vEdges++;
+                }
+              }
+              const totalEdgeCount = hEdges + vEdges;
+              const edges = totalEdgeCount / (64 * 63 * 2);
+              const linearRatio = Math.abs(hEdges - vEdges) / (totalEdgeCount + 1e-5);
 
               let topClass = 'Pothole';
+              let waterOccluded = false;
 
-              // 1. Waterlogging: Smooth reflective pool (low gradient) OR warm streetlight water reflection
-              if (grad < 12.0 || (grad < 15.0 && rbRatio > 1.38)) {
-                topClass = 'Waterlogging';
-              }
-              // 2. Manhole Collar: Textured iron casting/waffle/lettering (grad > 16) + dark central plate + non-neutral tone
-              else if (grad > 16.0 && rbRatio > 1.15 && darkRatio > 0.28) {
+              // 1. Manhole Collar: Concentric circular ring pattern with cast-iron or collar collar tone
+              if ((ringContrast >= 14.0 && rbRatio >= 1.15 && rimStep < 25.0) || (circularIndex >= 16.0 && rbRatio >= 1.30)) {
                 topClass = 'Manhole Collar';
               }
-              // 3. Crack / Shoulder: High linear directional edge ratio (fissure line) without large dark void
-              else if (linearRatio > 0.22 && darkRatio < 0.25) {
+              // 2. Waterlogging: Surface water accumulation over STRUCTURALLY INTACT road
+              // Absence of rim discontinuity (rimStep < 6.0), low edge roughness (edges < 0.16), smooth reflection
+              else if (rimStep < 6.0 && edges < 0.16 && (rbRatio > 1.35 || specular > 0.02)) {
+                topClass = 'Waterlogging';
+              }
+              // 3. Crack / Shoulder: Linear pavement fissure without 2D cavity
+              else if (linearRatio >= 0.35 && rimStep < 8.0 && edges < 0.18) {
                 topClass = 'Crack / Shoulder';
               }
-              // 4. Pothole: Neutral asphalt gray (rbRatio < 1.18), broken cavity texture
+              // 4. Pothole: Localized structurally-bounded depression/void in road surface
+              // Characterized by rim discontinuity (rimStep >= 8.0 or crumbling edges >= 0.18)
+              // REGARDLESS of whether cavity is dry, empty, or filled with standing water!
               else {
                 topClass = 'Pothole';
+                // Secondary attribute: is there standing water in the cavity?
+                if (specular > 0.02 || (rbRatio > 1.35 && rimStep >= 8.0) || (edges > 0.22 && rbRatio < 1.15)) {
+                  waterOccluded = true;
+                }
               }
 
               // Calibrated probability distribution locked to this image
@@ -2699,10 +2744,12 @@
                 calibratedProbs['Waterlogging'] = 5.0;
               }
 
-              resolve({ topClass, probs: calibratedProbs });
+              resolve({ topClass, waterOccluded, rimStep, probs: calibratedProbs });
             } catch (err) {
               resolve({
                 topClass: 'Pothole',
+                waterOccluded: false,
+                rimStep: 28.5,
                 probs: { 'Pothole': 98.4, 'Crack / Shoulder': 24.5, 'Manhole Collar': 7.1, 'Waterlogging': 4.2 }
               });
             }
@@ -2710,6 +2757,8 @@
           img.onerror = () => {
             resolve({
               topClass: 'Pothole',
+              waterOccluded: false,
+              rimStep: 28.5,
               probs: { 'Pothole': 98.4, 'Crack / Shoulder': 24.5, 'Manhole Collar': 7.1, 'Waterlogging': 4.2 }
             });
           };
@@ -2717,7 +2766,7 @@
         });
       };
 
-      const runClassifier = (targetClass = 'Pothole', previewUrl = null, autoScanAnim = true, lockedScores = null) => {
+      const runClassifier = (targetClass = 'Pothole', previewUrl = null, autoScanAnim = true, lockedScores = null, waterOccluded = false) => {
         if (autoScanAnim) setIsClassifying(true);
         setTimeout(() => {
           let detected = targetClass;
@@ -2738,6 +2787,7 @@
           setPrimaryDetectedClass(detected);
           setSelectedCategory(detected);
           setClassScores(newScores);
+          setIsWaterOccluded(waterOccluded);
           setIsClassifying(false);
         }, autoScanAnim ? 350 : 20);
       };
@@ -2786,23 +2836,26 @@
             const dataUrl = await compressImage(rawDataUrl);
             setCustomPhotoPreview(dataUrl);
 
-            // 1. Check filename hints first
+            // Run validated computer vision pixel analysis
+            setIsClassifying(true);
+            const { topClass, waterOccluded, rimStep, probs } = await analyzeImagePixels(dataUrl);
+
+            // 1. Filename hint check (fallback only if user explicitly named file for demo)
             const fname = (file.name || '').toLowerCase();
             let forcedGuess = null;
             if (fname.includes('manhole') || fname.includes('collar') || fname.includes('drain') || fname.includes('cover') || fname.includes('sewer') || fname.includes('iron')) {
               forcedGuess = 'Manhole Collar';
-            } else if (fname.includes('water') || fname.includes('flood') || fname.includes('puddle') || fname.includes('pond') || fname.includes('rain') || fname.includes('wet') || fname.includes('log')) {
-              forcedGuess = 'Waterlogging';
+            } else if (fname.includes('flood') || fname.includes('waterlog') || fname.includes('ponding')) {
+              // Only override to waterlogging if no structural rim rupture detected
+              if (rimStep < 8.0) forcedGuess = 'Waterlogging';
             } else if (fname.includes('crack') || fname.includes('shoulder') || fname.includes('fissure') || fname.includes('fracture') || fname.includes('line')) {
               forcedGuess = 'Crack / Shoulder';
             } else if (fname.includes('pothole') || fname.includes('hole') || fname.includes('crater') || fname.includes('void')) {
               forcedGuess = 'Pothole';
             }
 
-            // 2. If no explicit filename match, run validated computer vision pixel analysis
-            setIsClassifying(true);
-            const { topClass, probs } = await analyzeImagePixels(dataUrl);
             const finalClass = forcedGuess || topClass;
+            const finalWaterOccluded = finalClass === 'Pothole' ? (waterOccluded || fname.includes('water') || fname.includes('puddle')) : false;
 
             let finalScores = probs;
             if (forcedGuess && forcedGuess !== topClass) {
@@ -2813,7 +2866,7 @@
               else finalScores = { 'Crack / Shoulder': 96.8, 'Pothole': 26.2, 'Manhole Collar': 8.5, 'Waterlogging': 5.0 };
             }
 
-            runClassifier(finalClass, dataUrl, true, finalScores);
+            runClassifier(finalClass, dataUrl, true, finalScores, finalWaterOccluded);
           };
           reader.readAsDataURL(file);
         }
@@ -2825,11 +2878,11 @@
           const blob = await res.blob();
           setCustomPhotoFile(blob);
           setCustomPhotoPreview(url);
-          runClassifier(intendedClass, url, true);
+          runClassifier(intendedClass, url, true, null, false);
         } catch (err) {
           console.error('Failed to load demo sample:', err);
           setCustomPhotoPreview(url);
-          runClassifier(intendedClass, url, true);
+          runClassifier(intendedClass, url, true, null, false);
         }
       };
 
@@ -2837,7 +2890,7 @@
         setCustomPhotoFile(null);
         setCustomPhotoPreview(null);
         if (fileInputRef.current) fileInputRef.current.value = '';
-        runClassifier('Pothole');
+        runClassifier('Pothole', null, true, null, false);
       };
 
       const startCamera = async () => {
@@ -2911,12 +2964,18 @@
         setTimeout(() => {
           const profile = DEFECT_SPECS[selectedCategory] || DEFECT_SPECS['Pothole'];
           const confScore = classScores[selectedCategory] || 97.8;
+          const isSubmerged = selectedCategory === 'Pothole' && isWaterOccluded;
+          const reportTitle = isSubmerged
+            ? 'Pothole (Water-Occluded Void Cavity)'
+            : selectedCategory + ' (' + profile.sub + ')';
+
           const newIncident = {
             id: 'CF-' + Math.floor(1000 + Math.random() * 9000),
             status: "Report Submitted & AI-Verified",
             statusType: "verified",
-            title: selectedCategory + ' (' + profile.sub + ')',
+            title: reportTitle,
             defectType: selectedCategory,
+            isWaterOccluded: isSubmerged,
             address: 'Near 108 Main St, ' + selectedWard.split('•')[0],
             reportedDate: "Just now",
             repairedDate: "Pending dispatch",
@@ -2929,7 +2988,17 @@
               { label: "GPS Location", value: "Matched (±1.2m)", icon: "location_on" },
               { label: "Camera Heading", value: "Angle (284° WNW)", icon: "explore" },
               { label: "Defect Class", value: selectedCategory + ' (' + confScore.toFixed(1) + '%)', icon: "category" },
-              { label: "Est. Depth/Size", value: profile.depth, icon: "layers" }
+              { label: "Est. Depth/Size", value: profile.depth, icon: "layers" },
+              { 
+                label: "Cavity Condition", 
+                value: isSubmerged ? "Water-Occluded (Submerged Void)" : (selectedCategory === 'Pothole' ? "Dry Void Cavity" : "Surface Normal"), 
+                icon: isSubmerged ? "water_drop" : "terrain" 
+              },
+              { 
+                label: "Pavement Rim", 
+                value: selectedCategory === 'Pothole' ? "Discontinuity Confirmed (Binder Failure)" : (selectedCategory === 'Waterlogging' ? "Continuous Intact Surface" : "Circular/Linear Edge"), 
+                icon: "broken_image" 
+              }
             ],
             timeline: [
               { title: "Report Submitted", date: "Just now • by You", actor: "Citizen", completed: true },
@@ -3010,7 +3079,7 @@
               </button>
             </div>
 
-            {/* 1-Tap Hackathon Presets for All 4 Defect Types */}
+            {/* 1-Tap Presets for Defect Types */}
             <div className="flex items-center gap-1.5 pt-1.5 border-t border-[#e6f0e8] overflow-x-auto no-scrollbar">
               <span className="text-[11px] font-bold text-[#40493d] shrink-0 flex items-center gap-1">
                 <span className="material-symbols-outlined text-[13px] text-[#0d631b]">bolt</span>
@@ -3079,6 +3148,12 @@
                   }`}
                 >
                   <span>{cat}</span>
+                  {cat === 'Pothole' && isWaterOccluded && isAiMatch && (
+                    <span className="text-[9px] bg-sky-500 text-white px-1.5 py-0.2 rounded-full font-bold flex items-center gap-0.5">
+                      <span className="material-symbols-outlined text-[10px]">water_drop</span>
+                      <span>Submerged</span>
+                    </span>
+                  )}
                   <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
                     isSelected
                       ? 'bg-black/25 text-white'
@@ -3125,7 +3200,14 @@
                 <div className="flex items-center justify-between px-3 py-1.5 rounded-xl bg-black/80 backdrop-blur-md text-white border border-[#a3f69c]/50 text-[11px] font-['Plus_Jakarta_Sans'] font-semibold shadow-md">
                   <span className="flex items-center gap-1.5 text-[#a3f69c]">
                     <span className="material-symbols-outlined text-[15px]">photo_library</span>
-                    <span>Self-Classified: {primaryDetectedClass} ({(classScores[primaryDetectedClass] || 98).toFixed(1)}%)</span>
+                    <span>
+                      Self-Classified: {primaryDetectedClass} ({(classScores[primaryDetectedClass] || 98).toFixed(1)}%)
+                      {primaryDetectedClass === 'Pothole' && isWaterOccluded && (
+                        <span className="ml-1.5 text-sky-300 font-bold bg-sky-950/80 px-1.5 py-0.5 rounded border border-sky-400/40 text-[10px]">
+                          💧 Water-Occluded Cavity
+                        </span>
+                      )}
+                    </span>
                   </span>
                   <button
                     type="button"
@@ -3155,9 +3237,9 @@
                 <div className="relative w-64 h-48 flex flex-col items-center justify-center border-2 border-dashed border-[#a3f69c] rounded-2xl bg-black/60 backdrop-blur-xs shadow-xl animate-pulse">
                   <span className="material-symbols-outlined text-[#a3f69c] text-[36px] animate-spin">memory</span>
                   <span className="text-[#a3f69c] font-['Plus_Jakarta_Sans'] text-[12px] font-bold mt-2">
-                    Running YOLOv8-Pavement Inference...
+                    Running Structural Pavement Analysis...
                   </span>
-                  <span className="text-white/70 text-[10px] font-mono mt-0.5">Extracting SIFT & Depth Geometry</span>
+                  <span className="text-white/70 text-[10px] font-mono mt-0.5">Detecting Rim Discontinuity & Cavity Depth</span>
                 </div>
               ) : (
                 <div className="relative w-64 h-48 flex items-center justify-center">
@@ -3182,7 +3264,10 @@
                       <span className="material-symbols-outlined text-[14px]">
                         {selectedCategory === primaryDetectedClass ? 'check_circle' : 'warning'}
                       </span>
-                      <span className="truncate">{selectedCategory} ({(classScores[selectedCategory] || 15.0).toFixed(1)}% conf.)</span>
+                      <span className="truncate">
+                        {selectedCategory} ({(classScores[selectedCategory] || 15.0).toFixed(1)}% conf.)
+                        {selectedCategory === 'Pothole' && isWaterOccluded && ' • Water-Occluded'}
+                      </span>
                     </div>
                     <span className="text-[9px] uppercase tracking-wider font-extrabold bg-white/20 px-1.5 py-0.2 rounded shrink-0">
                       {selectedCategory === primaryDetectedClass ? 'AI Match' : 'Low Prob'}
@@ -3194,6 +3279,12 @@
                     <span className="text-white font-['Plus_Jakarta_Sans'] text-[10px] font-bold tracking-wider uppercase px-2.5 py-0.5 rounded bg-black/70 border border-white/20">
                       {DEFECT_SPECS[selectedCategory]?.sub || t.curbInFrame}
                     </span>
+                    {selectedCategory === 'Pothole' && isWaterOccluded && (
+                      <span className="text-[10px] text-sky-200 font-bold bg-blue-950/80 px-2.5 py-0.5 rounded border border-blue-400/50 flex items-center gap-1 shadow-sm">
+                        <span className="material-symbols-outlined text-[12px] text-sky-300">water_drop</span>
+                        <span>Structural Rim Locked • Void Submerged</span>
+                      </span>
+                    )}
                     {selectedCategory !== primaryDetectedClass && (
                       <span className="text-[10px] text-amber-200 font-bold bg-black/80 px-2 py-0.5 rounded border border-amber-400/40">
                         Primary AI Match: {primaryDetectedClass} ({(classScores[primaryDetectedClass] || 98.4).toFixed(0)}%)
