@@ -21,9 +21,9 @@ export default function ReportCamera({
 
   const categories = [
     { id: 'Pothole', label: 'Pothole', icon: 'check' },
-    { id: 'Crumbling Curb', label: 'Crumbling Curb' },
-    { id: 'Manhole Rim', label: 'Manhole Rim' },
-    { id: 'Sidewalk Crack', label: 'Sidewalk Crack' }
+    { id: 'Crack', label: 'Crack' },
+    { id: 'Manhole Collar', label: 'Manhole Collar' },
+    { id: 'Waterlogging', label: 'Waterlogging' }
   ];
 
   const handleFileSelect = (e) => {

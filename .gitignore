@@ -45,3 +45,6 @@ powershell.cmd
 .idea/
 *.swp
 *~
+__pycache__/
+*.pyc
+scratch/
