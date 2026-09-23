@@ -59,6 +59,7 @@ class VerificationResult(BaseModel):
     step3: Step3AngleResult
     step4: Step4LandmarkResult
     step5: Step5RepairResult
+    vlm_result: Optional[dict] = None # Vision-LLM Semantic Co-Pilot result
     fusion_score: float               # Weighted aggregate 0.0–1.0
     outcome: str                      # auto_pass | officer_review | auto_reject
     rejection_reason: Optional[str]

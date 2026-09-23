@@ -199,6 +199,7 @@ class OfficerService:
             step3=parse(Step3AngleResult, v.step3_angle),
             step4=parse(Step4LandmarkResult, v.step4_landmarks),
             step5=parse(Step5RepairResult, v.step5_repair),
+            vlm_result=getattr(v, "vlm_verification", None),
             fusion_score=v.step6_fusion or 0.0,
             outcome=v.outcome or "unknown",
             rejection_reason=v.rejection_reason,

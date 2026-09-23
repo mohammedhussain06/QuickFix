@@ -50,6 +50,9 @@ class Verification(Base):
     # Step 5: YOLOv8 damage-before / patch-after segmentation
     step5_repair: Mapped[dict] = mapped_column(JSON_TYPE, nullable=True)
 
+    # Vision-LLM Semantic Co-Pilot & Anti-Fraud Verification
+    vlm_verification: Mapped[dict] = mapped_column(JSON_TYPE, nullable=True)
+
 
     # Step 6: Weighted fusion score (0.0–1.0)
     step6_fusion: Mapped[float] = mapped_column(Float, nullable=True)

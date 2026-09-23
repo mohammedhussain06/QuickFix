@@ -229,6 +229,34 @@ export async function submitRepairAndVerify(complaintId, { photoBlob, gps_lat, g
   }
 }
 
+/**
+ * Direct evaluation of two photos with the Vision-LLM verification analyst.
+ */
+export async function verifyPairWithVLM(beforeBlob, afterBlob, metadata = {}) {
+  try {
+    const fd = new FormData();
+    fd.append('before_photo', beforeBlob, 'before.jpg');
+    fd.append('after_photo', afterBlob, 'after.jpg');
+    if (metadata.complaint_id) fd.append('complaint_id', metadata.complaint_id);
+    if (metadata.complaint_lat != null) fd.append('complaint_lat', String(metadata.complaint_lat));
+    if (metadata.complaint_lng != null) fd.append('complaint_lng', String(metadata.complaint_lng));
+    if (metadata.complaint_heading != null) fd.append('complaint_heading', String(metadata.complaint_heading));
+    if (metadata.repair_lat != null) fd.append('repair_lat', String(metadata.repair_lat));
+    if (metadata.repair_lng != null) fd.append('repair_lng', String(metadata.repair_lng));
+    if (metadata.repair_heading != null) fd.append('repair_heading', String(metadata.repair_heading));
+
+    const res = await fetch('/api/v1/verification/verify-pair', {
+      method: 'POST',
+      body: fd,
+    });
+    if (!res.ok) throw new Error(`VLM HTTP ${res.status}`);
+    return await res.json();
+  } catch (err) {
+    console.warn('[api] verifyPairWithVLM fallback:', err.message);
+    return null;
+  }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Shape adapters (backend → frontend)
 // ─────────────────────────────────────────────────────────────────────────────

@@ -319,6 +319,129 @@ export default function MunicipalReviewDashboard({ onLogout, lang, setLang, t })
             </div>
           </div>
 
+          {/* Vision-LLM Co-Pilot Analysis Card */}
+          {selectedItem.vlm && (
+            <div className="flex flex-col gap-2.5 p-4 rounded-3xl bg-gradient-to-br from-[#f8fcf9] to-[#edf7ee] border border-[#c5e4c8] shadow-xs">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-purple-700 text-white flex items-center justify-center shadow-xs">
+                    <span className="material-symbols-outlined text-[18px]">psychology</span>
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="font-['Plus_Jakarta_Sans'] font-bold text-[13px] text-[#151d19]">
+                      Vision-LLM Co-Pilot Verdict
+                    </span>
+                    <span className="text-[10px] text-[#546346] font-semibold">
+                      Reasoning model evaluating content, angle, landmarks & repair
+                    </span>
+                  </div>
+                </div>
+
+                <span
+                  className={`px-3 py-1 rounded-full font-mono text-[11px] font-bold uppercase tracking-wider ${
+                    selectedItem.vlm.verdict === 'genuine_match'
+                      ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                      : selectedItem.vlm.verdict === 'needs_human_review'
+                      ? 'bg-amber-100 text-amber-800 border border-amber-300'
+                      : 'bg-red-100 text-red-800 border border-red-300'
+                  }`}
+                >
+                  {selectedItem.vlm.verdict.replace(/_/g, ' ')}
+                </span>
+              </div>
+
+              {/* Officer Summary Box */}
+              <div className="p-3 rounded-2xl bg-white/90 border border-[#d7e8c3]">
+                <span className="text-[10px] font-bold text-[#546346] uppercase tracking-wider block mb-0.5">
+                  Summary for Municipal Officer:
+                </span>
+                <p className="font-['Inter'] text-[12px] text-[#151d19] font-medium leading-relaxed">
+                  "{selectedItem.vlm.summary}"
+                </p>
+              </div>
+
+              {/* 4 Dimension Matrix */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
+                <div className="p-2.5 rounded-xl bg-white/80 border border-[#d7e8c3]/60 flex flex-col">
+                  <span className="font-bold text-[#151d19] flex items-center justify-between">
+                    <span>1. Location Plausibility</span>
+                    <span className={`text-[10px] font-mono px-1.5 py-0.2 rounded ${selectedItem.vlm.locationMatch === 'yes' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>
+                      {selectedItem.vlm.locationMatch.toUpperCase()}
+                    </span>
+                  </span>
+                  <span className="text-[#40493d] mt-1 text-[10.5px] leading-snug">
+                    {selectedItem.vlm.locationReasoning}
+                  </span>
+                </div>
+
+                <div className="p-2.5 rounded-xl bg-white/80 border border-[#d7e8c3]/60 flex flex-col">
+                  <span className="font-bold text-[#151d19] flex items-center justify-between">
+                    <span>2. Viewpoint & Angle</span>
+                    <span className={`text-[10px] font-mono px-1.5 py-0.2 rounded ${selectedItem.vlm.angleMatch === 'yes' ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'}`}>
+                      {selectedItem.vlm.angleMatch.toUpperCase()}
+                    </span>
+                  </span>
+                  <span className="text-[#40493d] mt-1 text-[10.5px] leading-snug">
+                    {selectedItem.vlm.angleReasoning}
+                  </span>
+                </div>
+
+                <div className="p-2.5 rounded-xl bg-white/80 border border-[#d7e8c3]/60 flex flex-col">
+                  <span className="font-bold text-[#151d19] flex items-center justify-between">
+                    <span>3. Landmark Matching</span>
+                    <span className={`text-[10px] font-mono px-1.5 py-0.2 rounded ${selectedItem.vlm.landmarkMatch === 'yes' ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'}`}>
+                      {selectedItem.vlm.landmarkMatch.toUpperCase()}
+                    </span>
+                  </span>
+                  <span className="text-[#40493d] mt-1 text-[10.5px] leading-snug">
+                    {selectedItem.vlm.landmarks.length > 0 ? `${selectedItem.vlm.landmarks.length} static landmarks confirmed` : 'Zero matching landmarks'}
+                  </span>
+                </div>
+
+                <div className="p-2.5 rounded-xl bg-white/80 border border-[#d7e8c3]/60 flex flex-col">
+                  <span className="font-bold text-[#151d19] flex items-center justify-between">
+                    <span>4. Repair Evidence</span>
+                    <span className={`text-[10px] font-mono px-1.5 py-0.2 rounded ${selectedItem.vlm.repairEvidence === 'yes' ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'}`}>
+                      {selectedItem.vlm.repairEvidence.toUpperCase()}
+                    </span>
+                  </span>
+                  <span className="text-[#40493d] mt-1 text-[10.5px] leading-snug">
+                    {selectedItem.vlm.repairReasoning}
+                  </span>
+                </div>
+              </div>
+
+              {/* Matched Landmarks List */}
+              {selectedItem.vlm.landmarks && selectedItem.vlm.landmarks.length > 0 && (
+                <div className="p-2.5 rounded-xl bg-emerald-50/80 border border-emerald-200">
+                  <span className="text-[10px] font-bold text-emerald-900 uppercase tracking-wider block mb-1">
+                    Static Background Landmarks Identified ({selectedItem.vlm.landmarks.length}):
+                  </span>
+                  <ul className="list-disc list-inside text-[10.5px] text-emerald-800 space-y-0.5">
+                    {selectedItem.vlm.landmarks.map((lm, idx) => (
+                      <li key={idx}>{lm}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* Red Flags Alert Box */}
+              {selectedItem.vlm.redFlags && selectedItem.vlm.redFlags.length > 0 && (
+                <div className="p-2.5 rounded-xl bg-red-50 border border-red-200">
+                  <span className="text-[10px] font-bold text-red-900 uppercase tracking-wider flex items-center gap-1 mb-1">
+                    <span className="material-symbols-outlined text-[13px]">warning</span>
+                    Fraud Signals & Red Flags:
+                  </span>
+                  <ul className="list-disc list-inside text-[10.5px] text-red-800 space-y-0.5">
+                    {selectedItem.vlm.redFlags.map((rf, idx) => (
+                      <li key={idx}>{rf}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Decision Feedback Banner */}
           {decisionFeedback && (
             <div

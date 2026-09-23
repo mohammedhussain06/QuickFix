@@ -37,12 +37,13 @@ from app.services.verification import (
     step4_landmark,
     step5_repair,
     step6_fusion,
+    vlm_verifier,
 )
 
 
 async def run_pipeline(repair_id: UUID) -> dict:
     """
-    Runs the full 6-step verification pipeline for a given repair.
+    Runs the full verification pipeline for a given repair with Vision-LLM Co-Pilot.
 
     Called by the Celery task. Uses its own DB session (not request-scoped).
 
@@ -61,7 +62,7 @@ async def run_pipeline(repair_id: UUID) -> dict:
         if not complaint:
             return {"error": f"Complaint for repair {repair_id} not found"}
 
-        # ── Download photos from MinIO ────────────────────────────────────────
+        # ── Download photos from MinIO / Local storage ────────────────────────
         before_bytes = download_photo(complaint.before_photo_url)
         after_bytes = download_photo(repair.after_photo_url)
 
@@ -117,12 +118,25 @@ async def run_pipeline(repair_id: UUID) -> dict:
         # ── Step 5: Repair confirmation ───────────────────────────────────────
         s5 = step5_repair.run(before_bytes, after_bytes)
 
+        # ── Vision-LLM Co-Pilot (Second, content-aware judge) ────────────────
+        s_vlm = vlm_verifier.evaluate_repair(
+            before_bytes=before_bytes,
+            after_bytes=after_bytes,
+            complaint_id=str(complaint.id),
+            complaint_lat=complaint.gps_lat,
+            complaint_lng=complaint.gps_lng,
+            complaint_heading=complaint.heading,
+            repair_lat=repair.after_gps_lat,
+            repair_lng=repair.after_gps_lng,
+            repair_heading=repair.after_heading,
+        )
+
         # ── Step 6: Fusion ────────────────────────────────────────────────────
-        s6 = step6_fusion.run(s2, s3, s4, s5)
+        s6 = step6_fusion.run(s2, s3, s4, s5, vlm_result=s_vlm)
 
         return await _finalise(
             db, audit, notify, repair, complaint,
-            s1=s1, s2=s2, s3=s3, s4=s4, s5=s5,
+            s1=s1, s2=s2, s3=s3, s4=s4, s5=s5, s_vlm=s_vlm,
             fusion_score=s6["fusion_score"],
             outcome=s6["outcome"],
             reason=s6.get("rejection_reason"),
@@ -140,6 +154,7 @@ async def _finalise(
     s3: dict = None,
     s4: dict = None,
     s5: dict = None,
+    s_vlm: dict = None,
     fusion_score: float = 0.0,
     outcome: str = "auto_reject",
     reason: str = None,
@@ -155,6 +170,7 @@ async def _finalise(
         step3_angle=s3,
         step4_landmarks=s4,
         step5_repair=s5,
+        vlm_verification=s_vlm,
         step6_fusion=fusion_score,
         outcome=outcome,
         rejection_reason=reason,

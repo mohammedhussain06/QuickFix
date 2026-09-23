@@ -58,8 +58,8 @@ export const MOCK_INCIDENT_DETAIL = {
     { title: "AI Telemetry Verified", date: "Oct 26 • 2:12 PM", actor: "98.4% Confidence Score", completed: true },
     { title: "Community Confirmation", date: "In Progress", actor: "Awaiting your local feedback", completed: false, current: true }
   ],
-  beforeImage: "https://lh3.googleusercontent.com/aida-public/AB6AXuBqN3QvFP4tqPuysr6ufwxUoj95aryz370FdFkg_EGvKUd5RwTSvhiEE6YhYHjD_Y9LwaX93PXa75BcQVDKyVi859KPLgj2WV5NWF7DxgPhrYUKVnFyhBQDX_k0-BagDesfVAwN2fBQd9rA1tCoIjamuC4YNZ0RiDEAPzMI3qGRx_K-vyma1mSrN2iPvEx2fKUC1vgGyJ3lfVp0UpdaTiQ2Ie6iIxOq1rc7RUyknq7eOOMo7VrrFwSPUw",
-  afterImage: "https://lh3.googleusercontent.com/aida-public/AB6AXuC0TpDjXqMy-XXPRo3jnGEZX6mNFVQwk4uHkdhs8-Rd9MWdBolqnPAC8HAj4SjbrIJl_qpPDrj7w5a7aKbUyACYce8jSnloSQQv3uQAF_nxrWdlIghUuGqfRKB7mgmDW0uRMHs5bqUTTqomyj1F44Dra3zNiF3YqAKTZWI_v-p2z15d4N-6tGfCjvRy_rfbHapOYLCIDB2_a3QCjyBq-w9dF2Csth_j3tZE2kF1pS22493WeVNH0-x35w"
+  beforeImage: "/demo_samples/hackathon_pothole_before.png",
+  afterImage: "/demo_samples/hackathon_pothole_after.jpg"
 };
 
 export const MOCK_FEED_ITEMS = [
@@ -129,18 +129,18 @@ export const MOCK_CONTRACTOR_JOBS = [
   {
     id: "WO-8429",
     complaintId: "CF-8429",
-    title: "Deep Arterial Pothole",
-    address: "342 Elm Street, Ward 14",
-    roadClass: "Major Arterial Road (High Traffic)",
+    title: "Major Pavement Depression & Cavity",
+    address: "Metro Line 7 & WEH Junction, Andheri East",
+    roadClass: "Major Arterial Highway (High Traffic)",
     distance: "0.4 km away",
     slaSecondsLeft: 6480,
     slaLabel: "1h 48m remaining",
     priority: "CRITICAL",
     payout: "₹12,000",
     depth: "5.4 cm",
-    reportedHeading: "284° WNW",
-    citizenPhoto: "https://lh3.googleusercontent.com/aida-public/AB6AXuBqN3QvFP4tqPuysr6ufwxUoj95aryz370FdFkg_EGvKUd5RwTSvhiEE6YhYHjD_Y9LwaX93PXa75BcQVDKyVi859KPLgj2WV5NWF7DxgPhrYUKVnFyhBQDX_k0-BagDesfVAwN2fBQd9rA1tCoIjamuC4YNZ0RiDEAPzMI3qGRx_K-vyma1mSrN2iPvEx2fKUC1vgGyJ3lfVp0UpdaTiQ2Ie6iIxOq1rc7RUyknq7eOOMo7VrrFwSPUw",
-    repairedPhoto: "https://lh3.googleusercontent.com/aida-public/AB6AXuC0TpDjXqMy-XXPRo3jnGEZX6mNFVQwk4uHkdhs8-Rd9MWdBolqnPAC8HAj4SjbrIJl_qpPDrj7w5a7aKbUyACYce8jSnloSQQv3uQAF_nxrWdlIghUuGqfRKB7mgmDW0uRMHs5bqUTTqomyj1F44Dra3zNiF3YqAKTZWI_v-p2z15d4N-6tGfCjvRy_rfbHapOYLCIDB2_a3QCjyBq-w9dF2Csth_j3tZE2kF1pS22493WeVNH0-x35w",
+    reportedHeading: "145° SE",
+    citizenPhoto: "/demo_samples/hackathon_pothole_before.png",
+    repairedPhoto: "/demo_samples/hackathon_pothole_after.jpg",
     status: "assigned"
   },
   {
@@ -200,14 +200,14 @@ export const MOCK_MUNICIPAL_QUEUE = [
     complaintId: "CF-8429",
     contractor: "Apex Paving Ltd.",
     crew: "Crew #4 (Rajesh Shinde)",
-    address: "342 Elm Street, Ward 14",
-    ward: "Ward 14 / Ward K-West",
+    address: "Metro Line 7 & WEH Junction, Andheri East",
+    ward: "Ward K/E • Andheri East",
     submittedTime: "12 mins ago",
     confidence: 98.4,
     aiStatus: "AUTO_PASS",
     payout: "₹12,000",
-    beforeImage: "https://lh3.googleusercontent.com/aida-public/AB6AXuBqN3QvFP4tqPuysr6ufwxUoj95aryz370FdFkg_EGvKUd5RwTSvhiEE6YhYHjD_Y9LwaX93PXa75BcQVDKyVi859KPLgj2WV5NWF7DxgPhrYUKVnFyhBQDX_k0-BagDesfVAwN2fBQd9rA1tCoIjamuC4YNZ0RiDEAPzMI3qGRx_K-vyma1mSrN2iPvEx2fKUC1vgGyJ3lfVp0UpdaTiQ2Ie6iIxOq1rc7RUyknq7eOOMo7VrrFwSPUw",
-    afterImage: "https://lh3.googleusercontent.com/aida-public/AB6AXuC0TpDjXqMy-XXPRo3jnGEZX6mNFVQwk4uHkdhs8-Rd9MWdBolqnPAC8HAj4SjbrIJl_qpPDrj7w5a7aKbUyACYce8jSnloSQQv3uQAF_nxrWdlIghUuGqfRKB7mgmDW0uRMHs5bqUTTqomyj1F44Dra3zNiF3YqAKTZWI_v-p2z15d4N-6tGfCjvRy_rfbHapOYLCIDB2_a3QCjyBq-w9dF2Csth_j3tZE2kF1pS22493WeVNH0-x35w",
+    beforeImage: "/demo_samples/hackathon_pothole_before.png",
+    afterImage: "/demo_samples/hackathon_pothole_after.jpg",
     checks: [
       { name: "Integrity (pHash)", detail: "Distance = 48 (Zero reuse)", passed: true },
       { name: "GPS Haversine", detail: "Δ 1.8m (Within 15m radius)", passed: true },
@@ -221,7 +221,26 @@ export const MOCK_MUNICIPAL_QUEUE = [
       { x1: 64, y1: 22, x2: 63, y2: 24, label: "Lamp Post" },
       { x1: 82, y1: 45, x2: 80, y2: 44, label: "Shop Signboard" },
       { x1: 45, y1: 78, x2: 46, y2: 77, label: "Road Marking" }
-    ]
+    ],
+    vlm: {
+      verdict: "genuine_match",
+      summary: "Verified: Contractor repaired the reported defect at the genuine location with 4 confirmed matching landmarks.",
+      locationMatch: "yes",
+      locationReasoning: "GPS coordinates match within 1.8m, well within urban satellite drift tolerance.",
+      angleMatch: "yes",
+      angleReasoning: "Camera heading Δ3.4° aligns with the original citizen vantage point.",
+      landmarkMatch: "yes",
+      landmarks: [
+        "Kerb line & drainage gutter (lower left perimeter aligned across both frames)",
+        "Lamp post & overhead utility wire (upper central quadrant)",
+        "Commercial shop signboard facade (right margin background)",
+        "Road centerline paint marking (consistent spatial geometry)"
+      ],
+      repairEvidence: "yes",
+      repairReasoning: "Depression and jagged rim void from complaint is replaced by fresh leveled bitumen compaction.",
+      redFlags: [],
+      confidence: 0.98
+    }
   },
   {
     id: "REV-8436",
@@ -246,7 +265,24 @@ export const MOCK_MUNICIPAL_QUEUE = [
     keypoints: [
       { x1: 35, y1: 40, x2: 48, y2: 46, label: "Tilted Kerb" },
       { x1: 70, y1: 30, x2: 82, y2: 38, label: "Tree Base" }
-    ]
+    ],
+    vlm: {
+      verdict: "needs_human_review",
+      summary: "FLAGGED FOR OFFICER REVIEW: Camera angle differs by 48.6°, creating perspective skew on background landmarks.",
+      locationMatch: "uncertain",
+      locationReasoning: "Borderline GPS drift of 18.2m recorded in dense high-rise corridor.",
+      angleMatch: "no",
+      angleReasoning: "Contractor captured photo from opposite sidewalk, inverting background perspective.",
+      landmarkMatch: "uncertain",
+      landmarks: [
+        "Road curb edge (partially visible with perspective shift)",
+        "Tree base on sidewalk (aligned with angle offset)"
+      ],
+      repairEvidence: "yes",
+      repairReasoning: "Surface defect appears patched, but perspective shift prevents automated geometric confirmation.",
+      redFlags: ["Substantial viewpoint skew; manual inspection required to guarantee location integrity"],
+      confidence: 0.62
+    }
   },
   {
     id: "REV-8441",
@@ -267,7 +303,24 @@ export const MOCK_MUNICIPAL_QUEUE = [
       { name: "Angle Homography", detail: "Homography failed", passed: false },
       { name: "Landmark ORB/SIFT", detail: "0% Shared Landmarks", passed: false }
     ],
-    keypoints: []
+    keypoints: [],
+    vlm: {
+      verdict: "reject_different_location",
+      summary: "REJECTED (Anti-Fraud): Substitution attack detected — contractor photographed an unrelated road location.",
+      locationMatch: "no",
+      locationReasoning: "Severe coordinate divergence (1.4 km distant) indicating completely different geographic street.",
+      angleMatch: "no",
+      angleReasoning: "Vantage points share zero geometric or directional correlation.",
+      landmarkMatch: "no",
+      landmarks: [],
+      repairEvidence: "no",
+      repairReasoning: "Zero evidence of repair at the reported defect spot; unrelated scene substituted.",
+      redFlags: [
+        "Backgrounds are distinctly different scenes; zero landmark persistence",
+        "Photo hash collision with previously submitted work order WO-8104"
+      ],
+      confidence: 0.99
+    }
   }
 ];
 
